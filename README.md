@@ -10,6 +10,14 @@
 - invalidを受け取ると、そのファイルを削除する。
 - FSでLock状態のファイルを記録しておく。lockDir:{file, state}で管理する。
 - open(file, w)するとき、requestLockを送信し、lockDirを更新して、そのファイルをロック状態にする。cacheからFSにファイルが同期されたら、requestUnLockを送信して、lockDirを更新して、ロック状態を解除する。ロック状態はreadできるがwriteできない。clientはFSにアクセスするときに、lockdirをチェックする。
+- open, read, write, closeの引数、返り値はlinuxを真似してる、goのf.Read, f.Writeも似たような引数と返り値を取ってるから実装しやすい
+
+
+論点
+- リモートサーバやキャッシュサーバの関数を実装する時どうするか
+1. 関数名と引数の文字列をパースする
+2. gRPCていうのを使う(参考: https://zenn.dev/hsaki/books/golang-grpc-starting/viewer/intro)
+- フロー図においてリモートの関数とローカルの関数をあまり区別できてないから要修正
 
 
 ### キャッシュなしread
@@ -35,6 +43,7 @@ sequenceDiagram
     Note over cacheA: Files: [a.txt]
     FS->>FS: updateCache("a.txt", clientA)
     Note over FS: cacheDir: {<br>a.txt: [clientA, clientB], <br>b.txt: [..., ...]} 
+    FS->>FS: fd = openFile("a.txt")
     FS->>clientA: fd
     clientA->>clientA: bytes = read(fd, buf)
     clientA->>FS: close(fd)
@@ -58,8 +67,6 @@ sequenceDiagram
     clientA->>cacheA: open("a.txt", r)
     cacheA->>cacheA: fd = openFile("a.txt")
     cacheA->>clientA: fd
-    Note left of cacheA: a.txt
-    FS->>clientA: fd
     clientA->>clientA: bytes = read(fd, buf)
     clientA->>FS: close(fd)
     FS->>FS: closeFile(fd)
@@ -87,7 +94,8 @@ sequenceDiagram
     Note over FS: lockDir: {<br>a.txt: True, <br>b.txt: False} 
 
     FS->>FS: fd = openFile("a.txt")
-    FS->>cacheB: sendInvalid(FS, cacheB, "a.txt")
+    clientA->>FS: sendInvalid("a.txt")
+    FS->>cacheB: invalid
     cacheB->>cacheB: deleteFile("a.txt")
     Note over cacheB: Files: []
 
@@ -136,8 +144,8 @@ sequenceDiagram
     Note over FS: lockDir: {<br>a.txt: True, <br>b.txt: False} 
 
     FS->>FS: deleteFile(cacheA, "a.txt")
-    FS-xcacheA: sendInvalid(FS, cacheA, "a.txt")
-    FS->>cacheB: sendInvalid(FS, cacheB, "a.txt")
+    clientA->>FS: sendInvalid("a.txt", except=cacheA)
+    FS->>cacheB: invalid
     cacheB->>cacheB: deleteFile("a.txt")
     Note over cacheB: Files: [b.txt]
     FS->>FS: deleteCache("a.txt")
@@ -159,4 +167,26 @@ sequenceDiagram
     FS->>FS :updateLock()
     Note over FS: lockDir: {<br>a.txt: False, <br>b.txt: False} 
 
+```
+
+## ファイル構成(要検討)
+
+```
+./src
+├─ code
+│   ├─ file-server
+│   │   └─ main.go
+│   ├─ cache
+│   │   └─ main.go
+│   └─ client
+│       └─ main.go
+├─ file
+│   ├─ file-server(file-server/main.goを起動すると生成)
+│       ├─ a.txt
+│       └─ b.txt
+│   ├─ clientA(client/main.goを起動すると生成)
+│       └─ a.txt
+│   └─ clientB(さらにclient/main.goを起動すると生成)
+│       ├─ a.txt
+│       └─ b.txt 
 ```
