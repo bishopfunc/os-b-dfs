@@ -10,33 +10,34 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func ReadWithoutCache(filename string) (*os.File, error) {
+func OpenAsReadWithoutCache(filename string) (*os.File, error) {
 	return os.Open(filename)
 }
 
-func ReadWithCache(filename string) (*os.File, error) {
+func OpenAsReadWithCache(filename string) (*os.File, error) {
+	file, err := os.Open(filename)
+	return file, err
+}
+
+func OpenAsWriteWithoutCache(filename string) (*os.File, error) {
 	return os.Open(filename)
 }
 
-func WriteWithoutCache(filename string) (*os.File, error) {
-	return os.Open(filename)
-}
-
-func WriteWithCache(filename string) (*os.File, error) {
+func OpenAsWriteWithCache(filename string) (*os.File, error) {
 	return os.Open(filename)
 }
 
 // 必須要件 open, close, read, write
-func Close(fileObj *os.File) error {
+func Close(file *os.File) error {
 	return nil
 }
 
-func Write(fileObj *os.File, buf []byte) (int, error) {
-	return fileObj.Write(buf)
+func Write(file *os.File, buf []byte) (int, error) {
+	return file.Write(buf)
 }
 
-func Read(fileObj *os.File, buf []byte) (int, error) {
-	return fileObj.Read(buf)
+func Read(file *os.File, buf []byte) (int, error) {
+	return file.Read(buf)
 }
 
 // 最低要件open
@@ -46,15 +47,15 @@ func Open(filename string, mode string) (*os.File, error) {
 	switch mode {
 	case "r":
 		if fileExists(filename) {
-			file, err = ReadWithCache(filename)
+			file, err = OpenAsReadWithCache(filename)
 		} else {
-			file, err = ReadWithoutCache(filename)
+			file, err = OpenAsReadWithoutCache(filename)
 		}
 	case "w":
 		if fileExists(filename) {
-			file, err = WriteWithCache(filename)
+			file, err = OpenAsWriteWithCache(filename)
 		} else {
-			file, err = WriteWithoutCache(filename)
+			file, err = OpenAsWriteWithoutCache(filename)
 		}
 	default:
 		return nil, fmt.Errorf("invalid mode")
@@ -111,21 +112,26 @@ func main() {
 	}
 
 	// read/write file
-	var buf []byte
 	var bytes int
+	fileinfo, err := file.Stat()
+	if err != nil {
+		log.Fatalf("could not get file info: %v", err)
+	}
+	filesize := fileinfo.Size()
+	buf := make([]byte, filesize)
 	if mode == "r" {
 		bytes, err = Read(file, buf)
 		if err != nil {
 			log.Fatalf("could not read: %v", err)
 		}
 		log.Printf("Read response: %d", bytes)
-		log.Printf("File content: %s", buf)
+		log.Printf("File content: %s", string(buf))
 	} else if mode == "w" {
 		bytes, err = Write(file, buf)
 		if err != nil {
 			log.Fatalf("could not write: %v", err)
 		}
-		log.Printf("Write response: %d", bytes)
+		// log.Printf("Write response: %d", string(buf))
 	}
 	// close file
 	err = Close(file)
