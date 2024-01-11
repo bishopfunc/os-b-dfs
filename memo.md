@@ -54,7 +54,21 @@ create cache: a.txt
 ```
 
 ## TODO
-client/main.go
+### client/main.go
+- [x] OpenAsReadWithCache
+- [x] OpenAsReadWithoutCache
 - [ ] OpenAsWriteWithCache
 - [ ] OpenAsWriteWithoutCache
+- [x] Open
+- [x] Close
+- [x] Read
+- [ ] Write
+- [x] deleteFile(直接削除すればいいから関数としてはいらない)
 
+### file-server/main.go
+- [ ] checkLock
+- [ ] UpdateLock
+- [ ] invalidの送信(多分サーバーストリーミング？)
+- [x] UpdateCache
+- [x] OpenFile
+- [ ] deleteCache
