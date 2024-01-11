@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "pkg/grpc";
+package dfs;
+
+service FileService {
+  rpc Read(FileRequest) returns (FileResponse) {}
+  rpc Write(FileRequest) returns (FileResponse) {}
+}
+
+message FileRequest {
+  string name = 1;
+}
+
+message FileResponse {
+  string content = 1;
+}
