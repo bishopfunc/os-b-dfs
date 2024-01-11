@@ -57,16 +57,22 @@ func (w *ClientWrapper) OpenAsReadWithCache(filename string) (*os.File, error) {
 }
 
 func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, error) {
+	// TODO
 	return os.Open(filename)
 }
 
 func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) {
+	// TODO	
 	return os.Open(filename)
 }
 
 // 必須要件 open, close, read, write
 func (w *ClientWrapper) Close(file *os.File) error {
-
+	err := file.Close()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
 	return nil
 }
 
