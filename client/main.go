@@ -2,60 +2,98 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
+
+	pb "mygrpc/pkg/grpc"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func OpenAsReadWithoutCache(filename string) (*os.File, error) {
-	return os.Open(filename)
+var (
+	port       = 50052
+	host       = "localhost"
+	clientName = fmt.Sprintf("%s:%d", host, port)
+)
+
+// grpcClient interface
+type ClientWrapper struct {
+	client pb.DFSClient
+	ctx    context.Context
 }
 
-func OpenAsReadWithCache(filename string) (*os.File, error) {
+func NewClientWrapper(client pb.DFSClient, ctx context.Context) *ClientWrapper {
+	return &ClientWrapper{
+		client: client,
+		ctx:    ctx,
+	}
+}
+
+func (w *ClientWrapper) OpenAsReadWithoutCache(filename string) (*os.File, error) {
+	fileResponse, err := w.client.OpenFile(w.ctx, &pb.OpenFileRequest{Filename: filename}) // w.clinet.Hoge()
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	_, _ = w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName})
+	// create file
+	file, err := os.Create(filename)
+	// write file
+	err = os.WriteFile(filename, []byte(fileResponse.GetContent()), 0644)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	fmt.Printf("create cache: %s\n", filename)
+	return file, err
+}
+
+func (w *ClientWrapper) OpenAsReadWithCache(filename string) (*os.File, error) {
 	file, err := os.Open(filename)
 	return file, err
 }
 
-func OpenAsWriteWithoutCache(filename string) (*os.File, error) {
+func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, error) {
 	return os.Open(filename)
 }
 
-func OpenAsWriteWithCache(filename string) (*os.File, error) {
+func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) {
 	return os.Open(filename)
 }
 
 // 必須要件 open, close, read, write
-func Close(file *os.File) error {
+func (w *ClientWrapper) Close(file *os.File) error {
+
 	return nil
 }
 
-func Write(file *os.File, buf []byte) (int, error) {
+func (w *ClientWrapper) Write(file *os.File, buf []byte) (int, error) {
 	return file.Write(buf)
 }
 
-func Read(file *os.File, buf []byte) (int, error) {
+func (w *ClientWrapper) Read(file *os.File, buf []byte) (int, error) {
 	return file.Read(buf)
 }
 
 // 最低要件open
-func Open(filename string, mode string) (*os.File, error) {
+func (w *ClientWrapper) Open(filename string, mode string) (*os.File, error) {
 	var file *os.File
 	var err error
 	switch mode {
 	case "r":
 		if fileExists(filename) {
-			file, err = OpenAsReadWithCache(filename)
+			file, err = w.OpenAsReadWithCache(filename)
 		} else {
-			file, err = OpenAsReadWithoutCache(filename)
+			file, err = w.OpenAsReadWithoutCache(filename)
 		}
 	case "w":
 		if fileExists(filename) {
-			file, err = OpenAsWriteWithCache(filename)
+			file, err = w.OpenAsWriteWithCache(filename)
 		} else {
-			file, err = OpenAsWriteWithoutCache(filename)
+			file, err = w.OpenAsWriteWithoutCache(filename)
 		}
 	default:
 		return nil, fmt.Errorf("invalid mode")
@@ -72,15 +110,14 @@ func fileExists(filename string) bool {
 }
 
 func main() {
-	conn, err := grpc.Dial("localhost:50052", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.Dial(clientName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	// c := pb.NewFileServiceClient(conn)
-
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Second) // 1 second timeout
-	// defer cancel()
+	c := pb.NewDFSClient(conn) // c.Hoge()
+	ctx := context.Background()
+	w := NewClientWrapper(c, ctx)
 
 	// Read file
 	// r, err := c.Read(ctx, &pb.FileRequest{Name: "example.txt"})
@@ -106,7 +143,7 @@ func main() {
 	scanner.Scan()
 	mode := scanner.Text()
 	// open file
-	file, err := Open(filename, mode)
+	file, err := w.Open(filename, mode)
 	if err != nil {
 		log.Fatalf("could not open file: %v", err)
 	}
@@ -120,21 +157,21 @@ func main() {
 	filesize := fileinfo.Size()
 	buf := make([]byte, filesize)
 	if mode == "r" {
-		bytes, err = Read(file, buf)
+		bytes, err = w.Read(file, buf)
 		if err != nil {
 			log.Fatalf("could not read: %v", err)
 		}
 		log.Printf("Read response: %d", bytes)
 		log.Printf("File content: %s", string(buf))
 	} else if mode == "w" {
-		bytes, err = Write(file, buf)
+		bytes, err = w.Write(file, buf)
 		if err != nil {
 			log.Fatalf("could not write: %v", err)
 		}
 		// log.Printf("Write response: %d", string(buf))
 	}
 	// close file
-	err = Close(file)
+	err = w.Close(file)
 	if err != nil {
 		log.Fatalf("could not close file: %v", err)
 	}
