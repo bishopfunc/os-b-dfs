@@ -3,9 +3,12 @@ syntax = "proto3";
 option go_package = "pkg/grpc";
 package dfs;
 
-service FileService {
+service DFS {
   rpc Read(FileRequest) returns (FileResponse) {}
   rpc Write(FileRequest) returns (FileResponse) {}
+  rpc OpenFile(OpenFileRequest) returns (OpenFileResponse);
+  rpc UpdateCache(UpdateCacheRequest) returns (UpdateCacheResponse);
+
 }
 
 message FileRequest {
@@ -14,4 +17,21 @@ message FileRequest {
 
 message FileResponse {
   string content = 1;
+}
+
+message OpenFileRequest {
+  string filename = 1;
+}
+
+message OpenFileResponse {
+  string content = 1;
+}
+
+message UpdateCacheRequest {
+  string filename = 1;
+  string client = 2;
+}
+
+message UpdateCacheResponse {
+  bool success = 1;
 }
