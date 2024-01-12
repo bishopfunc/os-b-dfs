@@ -24,18 +24,21 @@ type server struct {
 	pb.UnimplementedDFSServer
 }
 
-func (s *server) ReadFile(ctx context.Context, in *pb.ReadFileRequest) (*pb.ReadFileResponse, error) {
-	content, _ := os.ReadFile(in.Filename)
+func (s *server) ReadFile(ctx context.Context, rfr *pb.ReadFileRequest) (*pb.ReadFileResponse, error) {
+	content, err := os.ReadFile(rfr.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("[server] failed to read file: %v", err)
+	}
 	return &pb.ReadFileResponse{Content: string(content)}, nil
 }
 
-func (s *server) WriteFile(ctx context.Context, in *pb.WriteFileRequest) (*pb.WriteFileResponse, error) {
-	err := os.WriteFile(in.Filename, []byte(in.Content), 0644)
+func (s *server) WriteFile(ctx context.Context, wfr *pb.WriteFileRequest) (*pb.WriteFileResponse, error) {
+	err := os.WriteFile(wfr.Filename, []byte(wfr.Content), 0644)
 	return &pb.WriteFileResponse{Success: err == nil}, nil
 }
 
-func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.OpenFileResponse, error) {
-	content, err := ioutil.ReadFile(in.Filename)
+func (s *server) OpenFile(ctx context.Context, ofr *pb.OpenFileRequest) (*pb.OpenFileResponse, error) {
+	content, err := ioutil.ReadFile(ofr.Filename)
 	if err != nil {
 		return nil, fmt.Errorf("[server] failed to open file: %v", err)
 	}
@@ -43,23 +46,23 @@ func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.Open
 }
 
 // 各clientが持ってるcacheを更新する
-func (s *server) UpdateCache(ctx context.Context, in *pb.UpdateCacheRequest) (*pb.UpdateCacheResponse, error) {
-	cacheDir[in.Filename] = append(cacheDir[in.Filename], in.Client)
+func (s *server) UpdateCache(ctx context.Context, ucr *pb.UpdateCacheRequest) (*pb.UpdateCacheResponse, error) {
+	cacheDir[ucr.Filename] = append(cacheDir[ucr.Filename], ucr.Client)
 	return &pb.UpdateCacheResponse{Success: true}, nil
 }
 
-func (s *server) DeleteCache(ctx context.Context, in *pb.DeleteCacheRequest) (*pb.DeleteCacheResponse, error) {
-	delete(cacheDir, in.Filename) // cacheDirから削除する
+func (s *server) DeleteCache(ctx context.Context, dcr *pb.DeleteCacheRequest) (*pb.DeleteCacheResponse, error) {
+	delete(cacheDir, dcr.Filename) // cacheDirから削除する
 	return &pb.DeleteCacheResponse{Success: true}, nil
 }
 
-func (s *server) UpdateLock(ctx context.Context, in *pb.UpdateLockRequest) (*pb.UpdateLockResponse, error) {
-	lockDir[in.Filename] = in.Lock
+func (s *server) UpdateLock(ctx context.Context, ulr *pb.UpdateLockRequest) (*pb.UpdateLockResponse, error) {
+	lockDir[ulr.Filename] = ulr.Lock
 	return &pb.UpdateLockResponse{Success: true}, nil
 }
 
-func (s *server) ChcekcLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
-	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
+func (s *server) CheckcLock(ctx context.Context, clr *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
+	return &pb.CheckLockResponse{Locked: lockDir[clr.Filename]}, nil
 }
 
 func main() {

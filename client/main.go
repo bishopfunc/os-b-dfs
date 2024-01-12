@@ -38,7 +38,10 @@ func (w *ClientWrapper) OpenAsReadWithoutCache(filename string) (*os.File, error
 		fmt.Println(err)
 		return nil, err
 	}
-	_, _ = w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName})
+	if _, err = w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName}); err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
 	// create file
 	file, _ := os.Create(filename)
 	// write file
@@ -129,15 +132,21 @@ func (w *ClientWrapper) Read(file *os.File, buf []byte) (int, error) {
 // 最低要件open
 func (w *ClientWrapper) Open(filename string, mode string) (*os.File, error) {
 	// check lock
-	var file *os.File
-	var err error
 	switch mode {
 	case "r":
 		// open read は lock されていても開ける
 		if fileExists(filename) {
-			file, err = w.OpenAsReadWithCache(filename)
+			file, err := w.OpenAsReadWithCache(filename)
+			if err != nil {
+				return nil, err
+			}
+			return file, nil
 		} else {
-			file, err = w.OpenAsReadWithoutCache(filename)
+			file, err := w.OpenAsReadWithoutCache(filename)
+			if err != nil {
+				return nil, err
+			}
+			return file, nil
 		}
 	case "w":
 		// open write は lock されていたら開けない
@@ -146,14 +155,21 @@ func (w *ClientWrapper) Open(filename string, mode string) (*os.File, error) {
 			return nil, fmt.Errorf("file is locked")
 		}
 		if fileExists(filename) {
-			file, err = w.OpenAsWriteWithCache(filename)
+			file, err := w.OpenAsWriteWithCache(filename)
+			if err != nil {
+				return nil, err
+			}
+			return file, nil
 		} else {
-			file, err = w.OpenAsWriteWithoutCache(filename)
+			file, err := w.OpenAsWriteWithoutCache(filename)
+			if err != nil {
+				return nil, err
+			}
+			return file, nil
 		}
 	default:
 		return nil, fmt.Errorf("invalid mode")
 	}
-	return file, err
 }
 
 func fileExists(filename string) bool {
