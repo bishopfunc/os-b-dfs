@@ -57,18 +57,20 @@ create cache: a.txt
 ### client/main.go
 - [x] OpenAsReadWithCache
 - [x] OpenAsReadWithoutCache
-- [ ] OpenAsWriteWithCache
-- [ ] OpenAsWriteWithoutCache
+- [x] OpenAsWriteWithCache
+- [x] OpenAsWriteWithoutCache
 - [x] Open
 - [x] Close
 - [x] Read
-- [ ] Write
+- [x] Write
 - [x] deleteFile(直接削除すればいいから関数としてはいらない)
+- [x] requestLock,requestUnLockも関数としてはいらないかも？
 
 ### file-server/main.go
-- [ ] checkLock
-- [ ] UpdateLock
+- [x] checkLock
+- [x] UpdateLock
 - [ ] invalidの送信(多分サーバーストリーミング？)
+- [ ] sendInvalid
 - [x] UpdateCache
 - [x] OpenFile
-- [ ] deleteCache
+- [x] deleteCache
