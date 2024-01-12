@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 var (
@@ -60,8 +62,27 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 	// lock file
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
 	// send invalid from server to other client, other clinet delete cache
-	// TODO
-	// w.client.SendInvalid(w.ctx, &pb.SendInvalidRequest{Filename: filename, except: clientName})
+	req := &pb.InvalidNotificationRequest{Filename: filename, Except: &wrapperspb.StringValue{Value: clientName}}
+	stream, err := w.client.InvalidNotification(w.ctx, req)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	var invalid *pb.InvalidNotificationResponse
+	for {
+		invalid, err = stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	// delete file
+	if invalid.GetInvalid() {
+		os.Remove(filename)
+	}
+
 	// delete cache
 	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
 	// create file
@@ -77,8 +98,28 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	// lock file
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
 	// send invalid from server to other client, other clinet delete cache
-	// TODO
-	// w.client.SendInvalid(w.ctx, &pb.SendInvalidRequest{Filename: filename, except: clientName})
+
+	// send invalid from server to other client, other clinet delete cache
+	req := &pb.InvalidNotificationRequest{Filename: filename}
+	stream, err := w.client.InvalidNotification(w.ctx, req)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	var invalid *pb.InvalidNotificationResponse
+	for {
+		invalid, err = stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	// delete file
+	if invalid.GetInvalid() {
+		os.Remove(filename)
+	}
 	// delete cache
 	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
 	// create file

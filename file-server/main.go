@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	cacheDir = map[string][]string{}
-	lockDir  = map[string]bool{}
+	cacheDir   = map[string][]string{}
+	lockDir    = map[string]bool{}
+	clientList = []string{"localhost:50052", "localhost:50053", "xxx.xxx.xxx.xxx:8000"}
 )
 
 // {"a.txt": ["localhost:50052", "localhost:50053"], "b.txt": ["localhost:50052"]}
@@ -60,6 +61,19 @@ func (s *server) UpdateLock(ctx context.Context, in *pb.UpdateLockRequest) (*pb.
 
 func (s *server) ChcekcLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
+}
+
+func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream pb.DFS_InvalidNotificationServer) error {
+	clientList = cacheDir[req.Filename]
+	for _, client := range clientList {
+		if req.Except != nil && req.Except.Value == client {
+			err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true})
+			if err != nil {
+				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
+			}
+		}
+	}
+	return nil
 }
 
 func main() {

@@ -3,6 +3,8 @@ syntax = "proto3";
 option go_package = "pkg/grpc";
 package dfs;
 
+import "google/protobuf/wrappers.proto";
+
 service DFS {
   rpc ReadFile(ReadFileRequest) returns (ReadFileResponse) {}
   rpc WriteFile(WriteFileRequest) returns (WriteFileResponse) {}
@@ -12,6 +14,7 @@ service DFS {
   rpc DeleteCache(DeleteCacheRequest) returns (DeleteCacheResponse);
   rpc UpdateLock(UpdateLockRequest) returns (UpdateLockResponse);
   rpc CheckLock(CheckLockRequest) returns (CheckLockResponse);
+  rpc InvalidNotification(InvalidNotificationRequest) returns (stream InvalidNotificationResponse);
 }
 
 message ReadFileRequest {
@@ -82,3 +85,11 @@ message DeleteCacheResponse {
 }
 
 
+message InvalidNotificationRequest {
+  string filename = 1;
+  google.protobuf.StringValue except = 2;
+}
+
+message InvalidNotificationResponse {
+  bool invalid = 1;
+}
