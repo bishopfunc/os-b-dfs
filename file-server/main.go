@@ -59,7 +59,7 @@ func (s *server) UpdateLock(ctx context.Context, in *pb.UpdateLockRequest) (*pb.
 	return &pb.UpdateLockResponse{Success: true}, nil
 }
 
-func (s *server) ChcekcLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
+func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
@@ -74,6 +74,21 @@ func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream 
 		}
 	}
 	return nil
+}
+
+func startServer(port string) {
+	lis, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %v", port, err)
+	}
+
+	s := grpc.NewServer()
+	pb.RegisterDFSServer(s, &server{})
+
+	log.Printf("Server listening on %s", port)
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve on %s: %v", port, err)
+	}
 }
 
 func main() {
