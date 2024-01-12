@@ -30,6 +30,7 @@ type DFSClient interface {
 	DeleteCache(ctx context.Context, in *DeleteCacheRequest, opts ...grpc.CallOption) (*DeleteCacheResponse, error)
 	UpdateLock(ctx context.Context, in *UpdateLockRequest, opts ...grpc.CallOption) (*UpdateLockResponse, error)
 	CheckLock(ctx context.Context, in *CheckLockRequest, opts ...grpc.CallOption) (*CheckLockResponse, error)
+	InvalidNotification(ctx context.Context, in *InvalidNotificationRequest, opts ...grpc.CallOption) (DFS_InvalidNotificationClient, error)
 }
 
 type dFSClient struct {
@@ -112,6 +113,38 @@ func (c *dFSClient) CheckLock(ctx context.Context, in *CheckLockRequest, opts ..
 	return out, nil
 }
 
+func (c *dFSClient) InvalidNotification(ctx context.Context, in *InvalidNotificationRequest, opts ...grpc.CallOption) (DFS_InvalidNotificationClient, error) {
+	stream, err := c.cc.NewStream(ctx, &DFS_ServiceDesc.Streams[0], "/dfs.DFS/InvalidNotification", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &dFSInvalidNotificationClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type DFS_InvalidNotificationClient interface {
+	Recv() (*InvalidNotificationResponse, error)
+	grpc.ClientStream
+}
+
+type dFSInvalidNotificationClient struct {
+	grpc.ClientStream
+}
+
+func (x *dFSInvalidNotificationClient) Recv() (*InvalidNotificationResponse, error) {
+	m := new(InvalidNotificationResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // DFSServer is the server API for DFS service.
 // All implementations must embed UnimplementedDFSServer
 // for forward compatibility
@@ -124,6 +157,7 @@ type DFSServer interface {
 	DeleteCache(context.Context, *DeleteCacheRequest) (*DeleteCacheResponse, error)
 	UpdateLock(context.Context, *UpdateLockRequest) (*UpdateLockResponse, error)
 	CheckLock(context.Context, *CheckLockRequest) (*CheckLockResponse, error)
+	InvalidNotification(*InvalidNotificationRequest, DFS_InvalidNotificationServer) error
 	mustEmbedUnimplementedDFSServer()
 }
 
@@ -154,6 +188,9 @@ func (UnimplementedDFSServer) UpdateLock(context.Context, *UpdateLockRequest) (*
 }
 func (UnimplementedDFSServer) CheckLock(context.Context, *CheckLockRequest) (*CheckLockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckLock not implemented")
+}
+func (UnimplementedDFSServer) InvalidNotification(*InvalidNotificationRequest, DFS_InvalidNotificationServer) error {
+	return status.Errorf(codes.Unimplemented, "method InvalidNotification not implemented")
 }
 func (UnimplementedDFSServer) mustEmbedUnimplementedDFSServer() {}
 
@@ -312,6 +349,27 @@ func _DFS_CheckLock_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DFS_InvalidNotification_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(InvalidNotificationRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DFSServer).InvalidNotification(m, &dFSInvalidNotificationServer{stream})
+}
+
+type DFS_InvalidNotificationServer interface {
+	Send(*InvalidNotificationResponse) error
+	grpc.ServerStream
+}
+
+type dFSInvalidNotificationServer struct {
+	grpc.ServerStream
+}
+
+func (x *dFSInvalidNotificationServer) Send(m *InvalidNotificationResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // DFS_ServiceDesc is the grpc.ServiceDesc for DFS service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -352,6 +410,12 @@ var DFS_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _DFS_CheckLock_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "InvalidNotification",
+			Handler:       _DFS_InvalidNotification_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "dfs.proto",
 }

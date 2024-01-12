@@ -58,19 +58,43 @@ func (s *server) UpdateLock(ctx context.Context, in *pb.UpdateLockRequest) (*pb.
 	return &pb.UpdateLockResponse{Success: true}, nil
 }
 
-func (s *server) ChcekcLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
+func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
-func main() {
-	lis, err := net.Listen("tcp", ":50052")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream pb.DFS_InvalidNotificationServer) error {
+	clientList := cacheDir[req.Filename]
+	for _, client := range clientList {
+		if req.Except != nil && req.Except.Value == client {
+			fmt.Printf("except: %s\n", req.Except.Value)
+			continue
+		}
+		fmt.Printf("client: %s\n", client)
+		err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true})
+		if err != nil {
+			return fmt.Errorf("[server] failed to send invalid notification: %v", err)
+		}
 	}
+	return nil
+}
+
+func startServer(port string) {
+	lis, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %v", port, err)
+	}
+
 	s := grpc.NewServer()
 	pb.RegisterDFSServer(s, &server{})
-	log.Println("Server listening on port 50052")
+
+	log.Printf("Server listening on %s", port)
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Fatalf("failed to serve on %s: %v", port, err)
 	}
+}
+
+func main() {
+	go startServer(":50052")
+	go startServer(":50053")
+	select {} // メインゴルーチンをブロックし続ける
 }

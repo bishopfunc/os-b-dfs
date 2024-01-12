@@ -3,6 +3,7 @@
 go mod init mygrpc
 go get -u google.golang.org/grpc@v1.50.0
 go get -u google.golang.org/protobuf/cmd/protoc-gen-go
+go get -u gopkg.in/yaml.v2
 
 mkdir -p pkg/grpc
 cd api
@@ -29,6 +30,12 @@ go run main.go
 cd client
 go run main.go
 ```
+
+## 注意
+- clientA, Bは同じコード、分散システムをイメージして別フォルダにしてる
+- 最初の図からちょっと変更ある
+- 途中まで書いたコードが残ってるけど、gRPCだとブロードキャスト通信ができないっぽいので困ってる。つまり、ファイルサーバにあるファイルを書き換えてもキャッシュを無効化できない(=invalidの送信ができない)
+
 
 ## 実行例
 OpenAsReadWithCache: `client/`に`abc.txt`がある
@@ -66,6 +73,7 @@ create cache: a.txt
 - [x] deleteFile(直接削除すればいいから関数としてはいらない)
 - [x] requestLock,requestUnLockも関数としてはいらないかも？
 
+
 ### file-server/main.go
 - [x] checkLock
 - [x] UpdateLock
@@ -74,3 +82,5 @@ create cache: a.txt
 - [x] UpdateCache
 - [x] OpenFile
 - [x] deleteCache
+
+
