@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -13,7 +12,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 	"gopkg.in/yaml.v2"
 )
 
@@ -70,30 +68,30 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
 	fmt.Printf("send invalid: %s\n", filename)
 	// send invalid from server to other client, other clinet delete cache
-	req := &pb.InvalidNotificationRequest{Filename: filename}
-	stream, err := w.client.InvalidNotification(w.ctx, req)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	var invalid *pb.InvalidNotificationResponse
-	if stream != nil {
-		for {
-			invalid, err = stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			// delete file
-			if invalid != nil && invalid.GetInvalid() {
-				fmt.Println("delete file: ", filename)
-				os.Remove(filename)
-				break
-			}
-		}
-	}
+	// req := &pb.InvalidNotificationRequest{Filename: filename}
+	// stream, err := w.client.InvalidNotification(w.ctx, req)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return nil, err
+	// }
+	// var invalid *pb.InvalidNotificationResponse
+	// if stream != nil {
+	// 	for {
+	// 		invalid, err = stream.Recv()
+	// 		if err == io.EOF {
+	// 			break
+	// 		}
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		// delete file
+	// 		if invalid != nil && invalid.GetInvalid() {
+	// 			fmt.Println("delete file: ", filename)
+	// 			os.Remove(filename)
+	// 			break
+	// 		}
+	// 	}
+	// }
 	// delete cache
 	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
 	// create file
@@ -110,30 +108,30 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
 	fmt.Printf("send invalid: %s\n", filename)
 	// send invalid from server to other client, other clinet delete cache
-	req := &pb.InvalidNotificationRequest{Filename: filename, Except: &wrapperspb.StringValue{Value: clientName}}
-	stream, err := w.client.InvalidNotification(w.ctx, req)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	var invalid *pb.InvalidNotificationResponse
-	if stream != nil {
-		for {
-			invalid, err = stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			// delete file
-			if invalid != nil && invalid.GetInvalid() {
-				fmt.Println("delete file: ", filename)
-				os.Remove(filename)
-				break
-			}
-		}
-	}
+	// req := &pb.InvalidNotificationRequest{Filename: filename, Except: &wrapperspb.StringValue{Value: clientName}}
+	// stream, err := w.client.InvalidNotification(w.ctx, req)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return nil, err
+	// }
+	// var invalid *pb.InvalidNotificationResponse
+	// if stream != nil {
+	// 	for {
+	// 		invalid, err = stream.Recv()
+	// 		if err == io.EOF {
+	// 			break
+	// 		}
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 	delete file
+	// 	if invalid != nil && invalid.GetInvalid() {
+	// 		fmt.Println("delete file: ", filename)
+	// 		os.Remove(filename)
+	// 		break
+	// 	}
+	// }
+	// }
 	// delete cache
 	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
 	// create file

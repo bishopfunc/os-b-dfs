@@ -31,6 +31,12 @@ cd client
 go run main.go
 ```
 
+## 注意
+- clientA, Bは同じコード、分散システムをイメージして別フォルダにしてる
+- 最初の図からちょっと変更ある
+- 途中まで書いたコードが残ってるけど、gRPCだとブロードキャスト通信ができないっぽいので困ってる。つまり、ファイルサーバにあるファイルを書き換えてもキャッシュを無効化できない(=invalidの送信ができない)
+
+
 ## 実行例
 OpenAsReadWithCache: `client/`に`abc.txt`がある
 ```
@@ -76,3 +82,5 @@ create cache: a.txt
 - [x] UpdateCache
 - [x] OpenFile
 - [x] deleteCache
+
+
