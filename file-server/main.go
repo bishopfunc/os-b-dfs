@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 
 	pb "mygrpc/pkg/grpc"
 
@@ -12,27 +14,30 @@ import (
 )
 
 var (
-	cacheDir = map[string][]string{
-		"a,txt": []string{"localhost:50052", "localhost:50053"},
-	}
+	cacheDir = map[string][]string{}
+	lockDir  = map[string]bool{}
 )
+
+// {"a.txt": ["localhost:50052", "localhost:50053"], "b.txt": ["localhost:50052"]}
 
 type server struct {
 	pb.UnimplementedDFSServer
 }
 
-func (s *server) Read(ctx context.Context, in *pb.FileRequest) (*pb.FileResponse, error) {
-	return &pb.FileResponse{Content: "Dummy file content"}, nil
+func (s *server) ReadFile(ctx context.Context, in *pb.ReadFileRequest) (*pb.ReadFileResponse, error) {
+	content, _ := os.ReadFile(in.Filename)
+	return &pb.ReadFileResponse{Content: string(content)}, nil
 }
 
-func (s *server) Write(ctx context.Context, in *pb.FileRequest) (*pb.FileResponse, error) {
-	return &pb.FileResponse{Content: "Write success"}, nil
+func (s *server) WriteFile(ctx context.Context, in *pb.WriteFileRequest) (*pb.WriteFileResponse, error) {
+	err := os.WriteFile(in.Filename, []byte(in.Content), 0644)
+	return &pb.WriteFileResponse{Success: err == nil}, nil
 }
 
 func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.OpenFileResponse, error) {
 	content, err := ioutil.ReadFile(in.Filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("[server] failed to open file: %v", err)
 	}
 	return &pb.OpenFileResponse{Content: string(content)}, nil
 }
@@ -41,6 +46,20 @@ func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.Open
 func (s *server) UpdateCache(ctx context.Context, in *pb.UpdateCacheRequest) (*pb.UpdateCacheResponse, error) {
 	cacheDir[in.Filename] = append(cacheDir[in.Filename], in.Client)
 	return &pb.UpdateCacheResponse{Success: true}, nil
+}
+
+func (s *server) DeleteCache(ctx context.Context, in *pb.DeleteCacheRequest) (*pb.DeleteCacheResponse, error) {
+	delete(cacheDir, in.Filename) // cacheDirから削除する
+	return &pb.DeleteCacheResponse{Success: true}, nil
+}
+
+func (s *server) UpdateLock(ctx context.Context, in *pb.UpdateLockRequest) (*pb.UpdateLockResponse, error) {
+	lockDir[in.Filename] = in.Lock
+	return &pb.UpdateLockResponse{Success: true}, nil
+}
+
+func (s *server) ChcekcLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
+	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
 func main() {

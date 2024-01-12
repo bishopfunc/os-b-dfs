@@ -22,10 +22,14 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DFSClient interface {
-	Read(ctx context.Context, in *FileRequest, opts ...grpc.CallOption) (*FileResponse, error)
-	Write(ctx context.Context, in *FileRequest, opts ...grpc.CallOption) (*FileResponse, error)
+	ReadFile(ctx context.Context, in *ReadFileRequest, opts ...grpc.CallOption) (*ReadFileResponse, error)
+	WriteFile(ctx context.Context, in *WriteFileRequest, opts ...grpc.CallOption) (*WriteFileResponse, error)
 	OpenFile(ctx context.Context, in *OpenFileRequest, opts ...grpc.CallOption) (*OpenFileResponse, error)
+	CloseFile(ctx context.Context, in *CloseFileRequest, opts ...grpc.CallOption) (*CloseFileResponse, error)
 	UpdateCache(ctx context.Context, in *UpdateCacheRequest, opts ...grpc.CallOption) (*UpdateCacheResponse, error)
+	DeleteCache(ctx context.Context, in *DeleteCacheRequest, opts ...grpc.CallOption) (*DeleteCacheResponse, error)
+	UpdateLock(ctx context.Context, in *UpdateLockRequest, opts ...grpc.CallOption) (*UpdateLockResponse, error)
+	CheckLock(ctx context.Context, in *CheckLockRequest, opts ...grpc.CallOption) (*CheckLockResponse, error)
 }
 
 type dFSClient struct {
@@ -36,18 +40,18 @@ func NewDFSClient(cc grpc.ClientConnInterface) DFSClient {
 	return &dFSClient{cc}
 }
 
-func (c *dFSClient) Read(ctx context.Context, in *FileRequest, opts ...grpc.CallOption) (*FileResponse, error) {
-	out := new(FileResponse)
-	err := c.cc.Invoke(ctx, "/dfs.DFS/Read", in, out, opts...)
+func (c *dFSClient) ReadFile(ctx context.Context, in *ReadFileRequest, opts ...grpc.CallOption) (*ReadFileResponse, error) {
+	out := new(ReadFileResponse)
+	err := c.cc.Invoke(ctx, "/dfs.DFS/ReadFile", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *dFSClient) Write(ctx context.Context, in *FileRequest, opts ...grpc.CallOption) (*FileResponse, error) {
-	out := new(FileResponse)
-	err := c.cc.Invoke(ctx, "/dfs.DFS/Write", in, out, opts...)
+func (c *dFSClient) WriteFile(ctx context.Context, in *WriteFileRequest, opts ...grpc.CallOption) (*WriteFileResponse, error) {
+	out := new(WriteFileResponse)
+	err := c.cc.Invoke(ctx, "/dfs.DFS/WriteFile", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,9 +67,45 @@ func (c *dFSClient) OpenFile(ctx context.Context, in *OpenFileRequest, opts ...g
 	return out, nil
 }
 
+func (c *dFSClient) CloseFile(ctx context.Context, in *CloseFileRequest, opts ...grpc.CallOption) (*CloseFileResponse, error) {
+	out := new(CloseFileResponse)
+	err := c.cc.Invoke(ctx, "/dfs.DFS/CloseFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dFSClient) UpdateCache(ctx context.Context, in *UpdateCacheRequest, opts ...grpc.CallOption) (*UpdateCacheResponse, error) {
 	out := new(UpdateCacheResponse)
 	err := c.cc.Invoke(ctx, "/dfs.DFS/UpdateCache", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dFSClient) DeleteCache(ctx context.Context, in *DeleteCacheRequest, opts ...grpc.CallOption) (*DeleteCacheResponse, error) {
+	out := new(DeleteCacheResponse)
+	err := c.cc.Invoke(ctx, "/dfs.DFS/DeleteCache", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dFSClient) UpdateLock(ctx context.Context, in *UpdateLockRequest, opts ...grpc.CallOption) (*UpdateLockResponse, error) {
+	out := new(UpdateLockResponse)
+	err := c.cc.Invoke(ctx, "/dfs.DFS/UpdateLock", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dFSClient) CheckLock(ctx context.Context, in *CheckLockRequest, opts ...grpc.CallOption) (*CheckLockResponse, error) {
+	out := new(CheckLockResponse)
+	err := c.cc.Invoke(ctx, "/dfs.DFS/CheckLock", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,10 +116,14 @@ func (c *dFSClient) UpdateCache(ctx context.Context, in *UpdateCacheRequest, opt
 // All implementations must embed UnimplementedDFSServer
 // for forward compatibility
 type DFSServer interface {
-	Read(context.Context, *FileRequest) (*FileResponse, error)
-	Write(context.Context, *FileRequest) (*FileResponse, error)
+	ReadFile(context.Context, *ReadFileRequest) (*ReadFileResponse, error)
+	WriteFile(context.Context, *WriteFileRequest) (*WriteFileResponse, error)
 	OpenFile(context.Context, *OpenFileRequest) (*OpenFileResponse, error)
+	CloseFile(context.Context, *CloseFileRequest) (*CloseFileResponse, error)
 	UpdateCache(context.Context, *UpdateCacheRequest) (*UpdateCacheResponse, error)
+	DeleteCache(context.Context, *DeleteCacheRequest) (*DeleteCacheResponse, error)
+	UpdateLock(context.Context, *UpdateLockRequest) (*UpdateLockResponse, error)
+	CheckLock(context.Context, *CheckLockRequest) (*CheckLockResponse, error)
 	mustEmbedUnimplementedDFSServer()
 }
 
@@ -87,17 +131,29 @@ type DFSServer interface {
 type UnimplementedDFSServer struct {
 }
 
-func (UnimplementedDFSServer) Read(context.Context, *FileRequest) (*FileResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
+func (UnimplementedDFSServer) ReadFile(context.Context, *ReadFileRequest) (*ReadFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadFile not implemented")
 }
-func (UnimplementedDFSServer) Write(context.Context, *FileRequest) (*FileResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
+func (UnimplementedDFSServer) WriteFile(context.Context, *WriteFileRequest) (*WriteFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WriteFile not implemented")
 }
 func (UnimplementedDFSServer) OpenFile(context.Context, *OpenFileRequest) (*OpenFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OpenFile not implemented")
 }
+func (UnimplementedDFSServer) CloseFile(context.Context, *CloseFileRequest) (*CloseFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CloseFile not implemented")
+}
 func (UnimplementedDFSServer) UpdateCache(context.Context, *UpdateCacheRequest) (*UpdateCacheResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCache not implemented")
+}
+func (UnimplementedDFSServer) DeleteCache(context.Context, *DeleteCacheRequest) (*DeleteCacheResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteCache not implemented")
+}
+func (UnimplementedDFSServer) UpdateLock(context.Context, *UpdateLockRequest) (*UpdateLockResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateLock not implemented")
+}
+func (UnimplementedDFSServer) CheckLock(context.Context, *CheckLockRequest) (*CheckLockResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckLock not implemented")
 }
 func (UnimplementedDFSServer) mustEmbedUnimplementedDFSServer() {}
 
@@ -112,38 +168,38 @@ func RegisterDFSServer(s grpc.ServiceRegistrar, srv DFSServer) {
 	s.RegisterService(&DFS_ServiceDesc, srv)
 }
 
-func _DFS_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FileRequest)
+func _DFS_ReadFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadFileRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DFSServer).Read(ctx, in)
+		return srv.(DFSServer).ReadFile(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dfs.DFS/Read",
+		FullMethod: "/dfs.DFS/ReadFile",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DFSServer).Read(ctx, req.(*FileRequest))
+		return srv.(DFSServer).ReadFile(ctx, req.(*ReadFileRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DFS_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FileRequest)
+func _DFS_WriteFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteFileRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DFSServer).Write(ctx, in)
+		return srv.(DFSServer).WriteFile(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dfs.DFS/Write",
+		FullMethod: "/dfs.DFS/WriteFile",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DFSServer).Write(ctx, req.(*FileRequest))
+		return srv.(DFSServer).WriteFile(ctx, req.(*WriteFileRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -166,6 +222,24 @@ func _DFS_OpenFile_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DFS_CloseFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CloseFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DFSServer).CloseFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dfs.DFS/CloseFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DFSServer).CloseFile(ctx, req.(*CloseFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DFS_UpdateCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdateCacheRequest)
 	if err := dec(in); err != nil {
@@ -184,6 +258,60 @@ func _DFS_UpdateCache_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DFS_DeleteCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteCacheRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DFSServer).DeleteCache(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dfs.DFS/DeleteCache",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DFSServer).DeleteCache(ctx, req.(*DeleteCacheRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DFS_UpdateLock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateLockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DFSServer).UpdateLock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dfs.DFS/UpdateLock",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DFSServer).UpdateLock(ctx, req.(*UpdateLockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DFS_CheckLock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckLockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DFSServer).CheckLock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dfs.DFS/CheckLock",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DFSServer).CheckLock(ctx, req.(*CheckLockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DFS_ServiceDesc is the grpc.ServiceDesc for DFS service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -192,20 +320,36 @@ var DFS_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*DFSServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Read",
-			Handler:    _DFS_Read_Handler,
+			MethodName: "ReadFile",
+			Handler:    _DFS_ReadFile_Handler,
 		},
 		{
-			MethodName: "Write",
-			Handler:    _DFS_Write_Handler,
+			MethodName: "WriteFile",
+			Handler:    _DFS_WriteFile_Handler,
 		},
 		{
 			MethodName: "OpenFile",
 			Handler:    _DFS_OpenFile_Handler,
 		},
 		{
+			MethodName: "CloseFile",
+			Handler:    _DFS_CloseFile_Handler,
+		},
+		{
 			MethodName: "UpdateCache",
 			Handler:    _DFS_UpdateCache_Handler,
+		},
+		{
+			MethodName: "DeleteCache",
+			Handler:    _DFS_DeleteCache_Handler,
+		},
+		{
+			MethodName: "UpdateLock",
+			Handler:    _DFS_UpdateLock_Handler,
+		},
+		{
+			MethodName: "CheckLock",
+			Handler:    _DFS_CheckLock_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

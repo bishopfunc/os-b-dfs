@@ -4,19 +4,31 @@ option go_package = "pkg/grpc";
 package dfs;
 
 service DFS {
-  rpc Read(FileRequest) returns (FileResponse) {}
-  rpc Write(FileRequest) returns (FileResponse) {}
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse) {}
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse) {}
   rpc OpenFile(OpenFileRequest) returns (OpenFileResponse);
+  rpc CloseFile(CloseFileRequest) returns (CloseFileResponse);  
   rpc UpdateCache(UpdateCacheRequest) returns (UpdateCacheResponse);
-
+  rpc DeleteCache(DeleteCacheRequest) returns (DeleteCacheResponse);
+  rpc UpdateLock(UpdateLockRequest) returns (UpdateLockResponse);
+  rpc CheckLock(CheckLockRequest) returns (CheckLockResponse);
 }
 
-message FileRequest {
-  string name = 1;
+message ReadFileRequest {
+  string filename = 1;
 }
 
-message FileResponse {
+message ReadFileResponse {
   string content = 1;
+}
+
+message WriteFileRequest {
+  string filename = 1;
+  string content = 2;
+}
+
+message WriteFileResponse {
+  bool success = 1;
 }
 
 message OpenFileRequest {
@@ -27,6 +39,31 @@ message OpenFileResponse {
   string content = 1;
 }
 
+message CloseFileRequest {
+  string filename = 1;
+}
+
+message CloseFileResponse {
+  bool success = 1;
+}
+
+message UpdateLockRequest {
+  string filename = 1;
+  bool lock = 2;
+}
+
+message UpdateLockResponse {
+  bool success = 1;
+}
+
+message CheckLockRequest {
+  string filename = 1;
+}
+
+message CheckLockResponse {
+  bool locked = 1;
+}
+
 message UpdateCacheRequest {
   string filename = 1;
   string client = 2;
@@ -35,3 +72,13 @@ message UpdateCacheRequest {
 message UpdateCacheResponse {
   bool success = 1;
 }
+
+message DeleteCacheRequest {
+  string filename = 1;
+}
+
+message DeleteCacheResponse {
+  bool success = 1;
+}
+
+
