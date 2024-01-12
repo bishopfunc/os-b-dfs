@@ -3,6 +3,7 @@
 go mod init mygrpc
 go get -u google.golang.org/grpc@v1.50.0
 go get -u google.golang.org/protobuf/cmd/protoc-gen-go
+go get -u gopkg.in/yaml.v2
 
 mkdir -p pkg/grpc
 cd api
@@ -65,6 +66,7 @@ create cache: a.txt
 - [x] Write
 - [x] deleteFile(直接削除すればいいから関数としてはいらない)
 - [x] requestLock,requestUnLockも関数としてはいらないかも？
+
 
 ### file-server/main.go
 - [x] checkLock

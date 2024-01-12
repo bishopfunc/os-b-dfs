@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -13,12 +14,18 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"gopkg.in/yaml.v2"
 )
 
+type Config struct {
+	Port int    `yaml:"port"`
+	Host string `yaml:"host"`
+}
+
 var (
-	port       = 50052
-	host       = "localhost"
-	clientName = fmt.Sprintf("%s:%d", host, port)
+	port       int
+	host       string
+	clientName string
 )
 
 // grpcClient interface
@@ -61,28 +68,32 @@ func (w *ClientWrapper) OpenAsReadWithCache(filename string) (*os.File, error) {
 func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, error) {
 	// lock file
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
+	fmt.Printf("send invalid: %s\n", filename)
 	// send invalid from server to other client, other clinet delete cache
-	req := &pb.InvalidNotificationRequest{Filename: filename, Except: &wrapperspb.StringValue{Value: clientName}}
+	req := &pb.InvalidNotificationRequest{Filename: filename}
 	stream, err := w.client.InvalidNotification(w.ctx, req)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
 	var invalid *pb.InvalidNotificationResponse
-	for {
-		invalid, err = stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
+	if stream != nil {
+		for {
+			invalid, err = stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			// delete file
+			if invalid != nil && invalid.GetInvalid() {
+				fmt.Println("delete file: ", filename)
+				os.Remove(filename)
+				break
+			}
 		}
 	}
-	// delete file
-	if invalid.GetInvalid() {
-		os.Remove(filename)
-	}
-
 	// delete cache
 	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
 	// create file
@@ -97,28 +108,31 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) {
 	// lock file
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
+	fmt.Printf("send invalid: %s\n", filename)
 	// send invalid from server to other client, other clinet delete cache
-
-	// send invalid from server to other client, other clinet delete cache
-	req := &pb.InvalidNotificationRequest{Filename: filename}
+	req := &pb.InvalidNotificationRequest{Filename: filename, Except: &wrapperspb.StringValue{Value: clientName}}
 	stream, err := w.client.InvalidNotification(w.ctx, req)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
 	var invalid *pb.InvalidNotificationResponse
-	for {
-		invalid, err = stream.Recv()
-		if err == io.EOF {
-			break
+	if stream != nil {
+		for {
+			invalid, err = stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			// delete file
+			if invalid != nil && invalid.GetInvalid() {
+				fmt.Println("delete file: ", filename)
+				os.Remove(filename)
+				break
+			}
 		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	// delete file
-	if invalid.GetInvalid() {
-		os.Remove(filename)
 	}
 	// delete cache
 	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
@@ -138,6 +152,8 @@ func (w *ClientWrapper) FinalizeWrite(file *os.File) error {
 	_, _ = w.client.WriteFile(w.ctx, &pb.WriteFileRequest{Filename: filename, Content: string(fileContent)})
 	// unlock file
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: false})
+	// update cache
+	_, _ = w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName})
 	return nil
 }
 
@@ -205,64 +221,90 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
+func loadConfig(filename string) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	var config Config
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	port = config.Port
+	host = config.Host
+	clientName = fmt.Sprintf("%s:%d", host, port)
+}
+
 func main() {
-	conn, err := grpc.Dial(clientName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	loadConfig("config.yaml") // load config
+	fmt.Println("port: ", port)
+
+	conn, err := grpc.Dial(clientName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()) // grpc connection
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
+	fmt.Println("connected to ", clientName)
 	c := pb.NewDFSClient(conn) // c.Hoge()
 	ctx := context.Background()
 	w := NewClientWrapper(c, ctx)
 
-	// input file name
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Enter file name:")
-	scanner.Scan()
-	filename := scanner.Text()
-	// input mode
-	fmt.Println("Enter mode: r/w")
-	scanner.Scan()
-	mode := scanner.Text()
-	// open file
-	file, err := w.Open(filename, mode)
-	if err != nil {
-		log.Fatalf("could not open file: %v", err)
-	}
-
-	// read/write file
-	var bytes int
-	fileinfo, err := file.Stat()
-	if err != nil {
-		log.Fatalf("could not get file info: %v", err)
-	}
-	if mode == "r" {
-		filesize := fileinfo.Size()
-		buf := make([]byte, filesize)
-		bytes, err = w.Read(file, buf)
-		if err != nil {
-			log.Fatalf("could not read: %v", err)
-		}
-		log.Printf("Read response: %d", bytes)
-		log.Printf("File content: %s", string(buf))
-	} else if mode == "w" {
-		fmt.Println("Enter file content:")
+	for {
+		// ファイル名の入力を求める
+		fmt.Println("Enter file name:")
+		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
-		content := scanner.Text()
-		bytes, err = w.Write(file, []byte(content))
+		filename := scanner.Text()
+
+		// モードの入力を求める
+		fmt.Println("Enter mode: r/w")
+		scanner.Scan()
+		mode := scanner.Text()
+
+		// ファイルを開く
+		file, err := w.Open(filename, mode)
 		if err != nil {
-			log.Fatalf("could not write: %v", err)
+			log.Printf("could not open file: %v", err)
+			continue // エラーが発生した場合、次のイテレーションへ
 		}
-		log.Printf("Write response: %d", bytes)
-		log.Printf("File content: %s", content)
-		err := w.FinalizeWrite(file)
+
+		// read/write file
+		var bytes int
+		fileinfo, err := file.Stat()
 		if err != nil {
-			log.Fatalf("could not finalize write: %v", err)
+			log.Fatalf("could not get file info: %v", err)
 		}
-	}
-	// close file
-	err = w.Close(file)
-	if err != nil {
-		log.Fatalf("could not close file: %v", err)
+		if mode == "r" {
+			filesize := fileinfo.Size()
+			buf := make([]byte, filesize)
+			bytes, err = w.Read(file, buf)
+			if err != nil {
+				log.Fatalf("could not read: %v", err)
+			}
+			log.Printf("Read response: %d", bytes)
+			log.Printf("File content: %s", string(buf))
+		} else if mode == "w" {
+			fmt.Println("Enter file content:")
+			scanner.Scan()
+			content := scanner.Text()
+			bytes, err = w.Write(file, []byte(content))
+			if err != nil {
+				log.Fatalf("could not write: %v", err)
+			}
+			log.Printf("Write response: %d", bytes)
+			log.Printf("File content: %s", content)
+			err := w.FinalizeWrite(file)
+			if err != nil {
+				log.Fatalf("could not finalize write: %v", err)
+			}
+		}
+		// close file
+		err = w.Close(file)
+		if err != nil {
+			log.Fatalf("could not close file: %v", err)
+		}
 	}
 }

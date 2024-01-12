@@ -14,9 +14,8 @@ import (
 )
 
 var (
-	cacheDir   = map[string][]string{}
-	lockDir    = map[string]bool{}
-	clientList = []string{"localhost:50052", "localhost:50053", "xxx.xxx.xxx.xxx:8000"}
+	cacheDir = map[string][]string{}
+	lockDir  = map[string]bool{}
 )
 
 // {"a.txt": ["localhost:50052", "localhost:50053"], "b.txt": ["localhost:50052"]}
@@ -64,13 +63,16 @@ func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.Ch
 }
 
 func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream pb.DFS_InvalidNotificationServer) error {
-	clientList = cacheDir[req.Filename]
+	clientList := cacheDir[req.Filename]
 	for _, client := range clientList {
 		if req.Except != nil && req.Except.Value == client {
-			err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true})
-			if err != nil {
-				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
-			}
+			fmt.Printf("except: %s\n", req.Except.Value)
+			continue
+		}
+		fmt.Printf("client: %s\n", client)
+		err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true})
+		if err != nil {
+			return fmt.Errorf("[server] failed to send invalid notification: %v", err)
 		}
 	}
 	return nil
@@ -92,14 +94,7 @@ func startServer(port string) {
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50052")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterDFSServer(s, &server{})
-	log.Println("Server listening on port 50052")
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	go startServer(":50052")
+	go startServer(":50053")
+	select {} // メインゴルーチンをブロックし続ける
 }
