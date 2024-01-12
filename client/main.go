@@ -206,7 +206,6 @@ func main() {
 	}
 
 	// read/write file
-	var bytes int
 	fileinfo, err := file.Stat()
 	if err != nil {
 		log.Fatalf("could not get file info: %v", err)
@@ -214,7 +213,7 @@ func main() {
 	if mode == "r" {
 		filesize := fileinfo.Size()
 		buf := make([]byte, filesize)
-		bytes, err = w.Read(file, buf)
+		bytes, err := w.Read(file, buf)
 		if err != nil {
 			log.Fatalf("could not read: %v", err)
 		}
@@ -224,14 +223,13 @@ func main() {
 		fmt.Println("Enter file content:")
 		scanner.Scan()
 		content := scanner.Text()
-		bytes, err = w.Write(file, []byte(content))
+		bytes, err := w.Write(file, []byte(content))
 		if err != nil {
 			log.Fatalf("could not write: %v", err)
 		}
 		log.Printf("Write response: %d", bytes)
 		log.Printf("File content: %s", content)
-		err := w.FinalizeWrite(file)
-		if err != nil {
+		if err := w.FinalizeWrite(file); err != nil {
 			log.Fatalf("could not finalize write: %v", err)
 		}
 	}
