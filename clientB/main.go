@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
 
 	pb "mygrpc/pkg/grpc"
 
@@ -28,14 +29,18 @@ var (
 
 // grpcClient interface
 type ClientWrapper struct {
-	client pb.DFSClient
-	ctx    context.Context
+	client          pb.DFSClient
+	ctx             context.Context
+	cachedFiles     []string // キャッシュしているファイル名のスライス
+	lastHealthCheck time.Time
 }
 
-func NewClientWrapper(client pb.DFSClient, ctx context.Context) *ClientWrapper {
+func NewClientWrapper(client pb.DFSClient, ctx context.Context, cachedFiles []string, lastHealthCheck time.Time) *ClientWrapper {
 	return &ClientWrapper{
-		client: client,
-		ctx:    ctx,
+		client:          client,
+		ctx:             ctx,
+		cachedFiles:     cachedFiles,
+		lastHealthCheck: lastHealthCheck,
 	}
 }
 
@@ -55,6 +60,7 @@ func (w *ClientWrapper) OpenAsReadWithoutCache(filename string) (*os.File, error
 		return nil, err
 	}
 	fmt.Printf("create cache: %s\n", filename)
+	w.cachedFiles = append(w.cachedFiles, filename)
 	return file, err
 }
 
@@ -96,6 +102,7 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
 	// create file
 	file, err := os.Create(filename)
+	w.cachedFiles = append(w.cachedFiles, filename)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
@@ -147,7 +154,7 @@ func (w *ClientWrapper) FinalizeWrite(file *os.File) error {
 	filename := file.Name()
 	// send file content to server
 	fileContent, _ := os.ReadFile(filename)
-	_, _ = w.client.WriteFile(w.ctx, &pb.WriteFileRequest{Filename: filename, Content: string(fileContent)})
+	_, _ = w.client.WriteFile(w.ctx, &pb.WriteFileRequest{Filename: filename, Content: string(fileContent), ClientPort: int32(port)})
 	// unlock file
 	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: false})
 	// update cache
@@ -236,6 +243,50 @@ func loadConfig(filename string) {
 	clientName = fmt.Sprintf("%s:%d", host, port)
 }
 
+func (w *ClientWrapper) DeleteCacheFile(filename string) {
+	// cachedFiles スライスから指定されたファイル名を削除する
+	for i, file := range w.cachedFiles {
+		if file == filename {
+			w.cachedFiles = append(w.cachedFiles[:i], w.cachedFiles[i+1:]...)
+			os.Remove(filename)
+			break
+		}
+	}
+}
+
+func (w *ClientWrapper) HealthCheck() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		<-ticker.C // タイマーイベントを待つ
+
+		if len(w.cachedFiles) == 0 {
+			// log.Println("No cached files to check")
+			continue
+		}
+
+		// for _, filename := range w.cachedFiles {
+		// 	log.Printf("Cached file: %s", filename)
+		// }
+
+		w.lastHealthCheck = time.Now()
+		response, err := w.client.HealthCheck(w.ctx, &pb.HealthCheckRequest{FileNames: w.cachedFiles})
+		if err != nil {
+			log.Printf("Health check failed: %v", err)
+			continue
+		}
+
+		// サーバーからの応答を確認し、キャッシュされたファイルが変更された場合は削除する
+		for _, status := range response.FileStatuses {
+			if status.ClientPort != int32(port) && status.UpdatedTime.AsTime().After(w.lastHealthCheck) { // 他のクライアントによって更新された場合
+				w.DeleteCacheFile(status.Filename) // キャッシュから削除
+				log.Printf("deleted invalid cache file: %s", status.Filename)
+			}
+		}
+	}
+}
+
 func main() {
 	loadConfig("config.yaml") // load config
 	fmt.Println("port: ", port)
@@ -248,7 +299,11 @@ func main() {
 	fmt.Println("connected to ", clientName)
 	c := pb.NewDFSClient(conn) // c.Hoge()
 	ctx := context.Background()
-	w := NewClientWrapper(c, ctx)
+	var cachedFiles []string
+	lastHealthCheck := time.Now()
+	w := NewClientWrapper(c, ctx, cachedFiles, lastHealthCheck)
+
+	go w.HealthCheck()
 
 	for {
 		// ファイル名の入力を求める
