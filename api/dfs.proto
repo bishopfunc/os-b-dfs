@@ -4,6 +4,7 @@ option go_package = "pkg/grpc";
 package dfs;
 
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
 
 service DFS {
   rpc ReadFile(ReadFileRequest) returns (ReadFileResponse) {}
@@ -15,6 +16,7 @@ service DFS {
   rpc UpdateLock(UpdateLockRequest) returns (UpdateLockResponse);
   rpc CheckLock(CheckLockRequest) returns (CheckLockResponse);
   rpc InvalidNotification(InvalidNotificationRequest) returns (stream InvalidNotificationResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }
 
 message ReadFileRequest {
@@ -28,6 +30,7 @@ message ReadFileResponse {
 message WriteFileRequest {
   string filename = 1;
   string content = 2;
+  int32 clientPort = 3;
 }
 
 message WriteFileResponse {
@@ -92,4 +95,18 @@ message InvalidNotificationRequest {
 
 message InvalidNotificationResponse {
   bool invalid = 1;
+}
+
+message HealthCheckRequest {
+  repeated string file_names = 1; // クライアントが持っているファイル一覧
+}
+
+message FileStatus {
+  string filename = 1;
+  int32 clientPort = 2;  
+  google.protobuf.Timestamp updatedTime = 3;   // 更新時刻
+}
+
+message HealthCheckResponse {
+  repeated FileStatus file_statuses = 1;  // 各ファイルの更新状況のリスト
 }

@@ -7,15 +7,18 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	pb "mygrpc/pkg/grpc"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
-	cacheDir = map[string][]string{}
-	lockDir  = map[string]bool{}
+	cacheDir    = map[string][]string{}
+	lockDir     = map[string]bool{}
+	updatedFile = map[string]map[int]time.Time{}
 )
 
 // {"a.txt": ["localhost:50052", "localhost:50053"], "b.txt": ["localhost:50052"]}
@@ -31,6 +34,12 @@ func (s *server) ReadFile(ctx context.Context, in *pb.ReadFileRequest) (*pb.Read
 
 func (s *server) WriteFile(ctx context.Context, in *pb.WriteFileRequest) (*pb.WriteFileResponse, error) {
 	err := os.WriteFile(in.Filename, []byte(in.Content), 0644)
+	// updatedFile マップを更新
+	if _, exists := updatedFile[in.Filename]; !exists {
+		updatedFile[in.Filename] = make(map[int]time.Time)
+	}
+	// ここでクライアントの情報と現在の時刻を保存
+	updatedFile[in.Filename][int(in.ClientPort)] = time.Now()
 	return &pb.WriteFileResponse{Success: err == nil}, nil
 }
 
@@ -76,6 +85,23 @@ func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream 
 		}
 	}
 	return nil
+}
+
+func (s *server) HealthCheck(ctx context.Context, in *pb.HealthCheckRequest) (*pb.HealthCheckResponse, error) {
+	var statuses []*pb.FileStatus
+	for _, filename := range in.FileNames {
+		if updateInfo, exists := updatedFile[filename]; exists {
+			for clientPort, updateTime := range updateInfo {
+				status := &pb.FileStatus{
+					Filename:    filename,
+					ClientPort:  int32(clientPort),
+					UpdatedTime: timestamppb.New(updateTime),
+				}
+				statuses = append(statuses, status)
+			}
+		}
+	}
+	return &pb.HealthCheckResponse{FileStatuses: statuses}, nil
 }
 
 func startServer(port string) {
