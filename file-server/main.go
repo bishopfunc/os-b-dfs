@@ -14,7 +14,12 @@ import (
 )
 
 var (
-	cacheDir = map[string][]string{}
+	// clients: key:uuid, value:pb.DFS_InvalidNotificationServer
+	clients = map[string]pb.DFS_InvalidNotificationServer{}
+	// cacheDict: key:fileName, value:uuid
+	cacheDict = map[string][]string{}
+	// dirty or clean
+	statusDict map[string]bool
 	lockDir  = map[string]bool{}
 )
 
@@ -47,14 +52,22 @@ func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.Open
 	return &pb.OpenFileResponse{Content: string(content)}, nil
 }
 
+func (s *server) CloseFile(ctx context.Context, in *pb.CloseFileRequest) (*pb.CloseFileResponse, error) {
+	ulr, err:= s.UpdateLock(ctx, &pb.UpdateLockRequest{Filename: in.Filename, Lock: false})
+	if err != nil {
+		return nil, fmt.Errorf("[server] failed to close file: %v", err)
+	}
+	return &pb.CloseFileResponse{Success: ulr.Success}, nil
+}
+
 // 各clientが持ってるcacheを更新する
 func (s *server) UpdateCache(ctx context.Context, in *pb.UpdateCacheRequest) (*pb.UpdateCacheResponse, error) {
-	cacheDir[in.Filename] = append(cacheDir[in.Filename], in.Client)
+	cacheDict[in.Filename] = append(cacheDict[in.Filename], in.Uuid)
 	return &pb.UpdateCacheResponse{Success: true}, nil
 }
 
 func (s *server) DeleteCache(ctx context.Context, in *pb.DeleteCacheRequest) (*pb.DeleteCacheResponse, error) {
-	delete(cacheDir, in.Filename) // cacheDirから削除する
+	delete(cacheDict, in.Filename) // cacheDictから削除する
 	return &pb.DeleteCacheResponse{Success: true}, nil
 }
 
@@ -67,16 +80,24 @@ func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.Ch
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
-func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream pb.DFS_InvalidNotificationServer) error {
-	clientList := cacheDir[req.Filename]
-	for _, client := range clientList {
-		if req.Except != nil && req.Except.Value == client {
-			fmt.Printf("except: %s\n", req.Except.Value)
-			continue
+func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error {
+	for {
+		resp, err := srv.Recv()
+		if err != nil {
+			log.Printf("recv err: %v", err)
+			break
 		}
-		fmt.Printf("client: %s\n", client)
-		if err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true}); err != nil {
-			return fmt.Errorf("[server] failed to send invalid notification: %v", err)
+		clientUuidList := cacheDict[resp.Filename]
+		for _, clientUuid := range clientUuidList {
+			client := clients[clientUuid]
+			// if resp.Except != nil && resp.Except.Value == client {
+			// 	fmt.Printf("except: %s\n", resp.Except.Value)
+			// 	continue
+			// }
+			fmt.Printf("client: %s\n", client)
+			if err := client.Send(&pb.InvalidNotificationResponse{Invalid: true}); err != nil {
+				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
+			}
 		}
 	}
 	return nil
