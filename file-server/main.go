@@ -25,13 +25,18 @@ type server struct {
 }
 
 func (s *server) ReadFile(ctx context.Context, in *pb.ReadFileRequest) (*pb.ReadFileResponse, error) {
-	content, _ := os.ReadFile(in.Filename)
+	content, err := os.ReadFile(in.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("[server] failed to read file: %v", err)
+	}
 	return &pb.ReadFileResponse{Content: string(content)}, nil
 }
 
 func (s *server) WriteFile(ctx context.Context, in *pb.WriteFileRequest) (*pb.WriteFileResponse, error) {
-	err := os.WriteFile(in.Filename, []byte(in.Content), 0644)
-	return &pb.WriteFileResponse{Success: err == nil}, nil
+	if err := os.WriteFile(in.Filename, []byte(in.Content), 0644); err != nil {
+		return nil, fmt.Errorf("[server] failed to write file: %v", err)
+	}
+	return &pb.WriteFileResponse{Success: true}, nil
 }
 
 func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.OpenFileResponse, error) {
@@ -70,8 +75,7 @@ func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream 
 			continue
 		}
 		fmt.Printf("client: %s\n", client)
-		err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true})
-		if err != nil {
+		if err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true}); err != nil {
 			return fmt.Errorf("[server] failed to send invalid notification: %v", err)
 		}
 	}

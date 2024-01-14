@@ -42,30 +42,37 @@ func NewClientWrapper(client pb.DFSClient, ctx context.Context) *ClientWrapper {
 func (w *ClientWrapper) OpenAsReadWithoutCache(filename string) (*os.File, error) {
 	fileResponse, err := w.client.OpenFile(w.ctx, &pb.OpenFileRequest{Filename: filename}) // w.clinet.Hoge()
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
-	_, _ = w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName})
+	if _, err := w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName}); err != nil {
+		return nil, err
+	}
 	// create file
-	file, _ := os.Create(filename)
-	// write file
-	err = os.WriteFile(filename, []byte(fileResponse.GetContent()), 0644)
+	file, err := os.Create(filename)
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
+	}
+	// write file
+	if err := os.WriteFile(filename, []byte(fileResponse.GetContent()), 0644); err != nil {
 		return nil, err
 	}
 	fmt.Printf("create cache: %s\n", filename)
-	return file, err
+	return file, nil
 }
 
 func (w *ClientWrapper) OpenAsReadWithCache(filename string) (*os.File, error) {
 	file, err := os.Open(filename)
-	return file, err
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }
 
 func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, error) {
 	// lock file
-	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
+	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true}); err != nil {
+		return nil, err
+	}
 	fmt.Printf("send invalid: %s\n", filename)
 	// send invalid from server to other client, other clinet delete cache
 	// req := &pb.InvalidNotificationRequest{Filename: filename}
@@ -93,19 +100,22 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 	// 	}
 	// }
 	// delete cache
-	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
+	if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename}); err != nil {
+		return nil, err
+	}
 	// create file
 	file, err := os.Create(filename)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
-	return file, err
+	return file, nil
 }
 
 func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) {
 	// lock file
-	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true})
+	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true}); err != nil {
+		return nil, err
+	}
 	fmt.Printf("send invalid: %s\n", filename)
 	// send invalid from server to other client, other clinet delete cache
 	// req := &pb.InvalidNotificationRequest{Filename: filename, Except: &wrapperspb.StringValue{Value: clientName}}
@@ -133,41 +143,47 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	// }
 	// }
 	// delete cache
-	_, _ = w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename})
+	if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename}); err != nil {
+		return nil, err
+	}
 	// create file
 	file, err := os.Create(filename)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
-	return file, err
+	return file, nil
 }
 
 func (w *ClientWrapper) FinalizeWrite(file *os.File) error {
 	filename := file.Name()
 	// send file content to server
-	fileContent, _ := os.ReadFile(filename)
-	_, _ = w.client.WriteFile(w.ctx, &pb.WriteFileRequest{Filename: filename, Content: string(fileContent)})
+	fileContent, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	if _, err := w.client.WriteFile(w.ctx, &pb.WriteFileRequest{Filename: filename, Content: string(fileContent)}); err != nil {
+		return err
+	}
 	// unlock file
-	_, _ = w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: false})
+	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: false}); err != nil {
+		return err
+	}
 	// update cache
-	_, _ = w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName})
+	if _, err = w.client.UpdateCache(w.ctx, &pb.UpdateCacheRequest{Filename: filename, Client: clientName}); err != nil {
+		return err
+	}
 	return nil
 }
 
 // 必須要件 open, close, read, write
 func (w *ClientWrapper) Close(file *os.File) error {
 	// ローカルファイルをclose
-	err := file.Close()
-	if err != nil {
-		fmt.Println(err)
+	if err := file.Close(); err != nil {
 		return err
 	}
 	// リモートファイルclose
 	filename := file.Name()
-	_, _ = w.client.CloseFile(w.ctx, &pb.CloseFileRequest{Filename: filename})
-	if err != nil {
-		fmt.Println(err)
+	if _, err := w.client.CloseFile(w.ctx, &pb.CloseFileRequest{Filename: filename}); err != nil {
 		return err
 	}
 	return nil
@@ -191,19 +207,34 @@ func (w *ClientWrapper) Open(filename string, mode string) (*os.File, error) {
 		// open read は lock されていても開ける
 		if fileExists(filename) {
 			file, err = w.OpenAsReadWithCache(filename)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			file, err = w.OpenAsReadWithoutCache(filename)
+			if err != nil {
+				return nil, err
+			}
 		}
 	case "w":
 		// open write は lock されていたら開けない
-		locked, _ := w.client.CheckLock(w.ctx, &pb.CheckLockRequest{Filename: filename})
+		locked, err := w.client.CheckLock(w.ctx, &pb.CheckLockRequest{Filename: filename})
+		if err != nil {
+			return nil, err
+		}
 		if locked.GetLocked() {
 			return nil, fmt.Errorf("file is locked")
 		}
 		if fileExists(filename) {
 			file, err = w.OpenAsWriteWithCache(filename)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			file, err = w.OpenAsWriteWithoutCache(filename)
+			if err != nil {
+				return nil, err
+			}
 		}
 	default:
 		return nil, fmt.Errorf("invalid mode")
@@ -226,8 +257,7 @@ func loadConfig(filename string) {
 	}
 
 	var config Config
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
+	if err := yaml.Unmarshal(data, &config); err != nil {
 		log.Fatalf("error: %v", err)
 	}
 
@@ -270,7 +300,6 @@ func main() {
 		}
 
 		// read/write file
-		var bytes int
 		fileinfo, err := file.Stat()
 		if err != nil {
 			log.Fatalf("could not get file info: %v", err)
@@ -278,7 +307,7 @@ func main() {
 		if mode == "r" {
 			filesize := fileinfo.Size()
 			buf := make([]byte, filesize)
-			bytes, err = w.Read(file, buf)
+			bytes, err := w.Read(file, buf)
 			if err != nil {
 				log.Fatalf("could not read: %v", err)
 			}
@@ -288,20 +317,18 @@ func main() {
 			fmt.Println("Enter file content:")
 			scanner.Scan()
 			content := scanner.Text()
-			bytes, err = w.Write(file, []byte(content))
+			bytes, err := w.Write(file, []byte(content))
 			if err != nil {
 				log.Fatalf("could not write: %v", err)
 			}
 			log.Printf("Write response: %d", bytes)
 			log.Printf("File content: %s", content)
-			err := w.FinalizeWrite(file)
-			if err != nil {
+			if err := w.FinalizeWrite(file); err != nil {
 				log.Fatalf("could not finalize write: %v", err)
 			}
 		}
 		// close file
-		err = w.Close(file)
-		if err != nil {
+		if err := w.Close(file); err != nil {
 			log.Fatalf("could not close file: %v", err)
 		}
 	}
