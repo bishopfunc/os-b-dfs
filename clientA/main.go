@@ -289,6 +289,11 @@ func main() {
 	ctx := context.Background()
 	w := NewClientWrapper(c, ctx)
 
+	stream, err := c.InvalidNotification(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	go func() {
 		for {
 			// ファイル名の入力を求める
@@ -323,34 +328,36 @@ func main() {
 				}
 				log.Printf("Read response: %d", bytes)
 				log.Printf("File content: %s", string(buf))
-				} else if mode == "w" {
-					fmt.Println("Enter file content:")
-					scanner.Scan()
-					content := scanner.Text()
-					bytes, err := w.Write(file, []byte(content))
-					if err != nil {
-						log.Fatalf("could not write: %v", err)
-					}
-					log.Printf("Write response: %d", bytes)
-					log.Printf("File content: %s", content)
-					if err := w.FinalizeWrite(file, uuidString); err != nil {
-						log.Fatalf("could not finalize write: %v", err)
-					}
+			} else if mode == "w" {
+				fmt.Println("Enter file content:")
+				scanner.Scan()
+				content := scanner.Text()
+				bytes, err := w.Write(file, []byte(content))
+				if err != nil {
+					log.Fatalf("could not write: %v", err)
 				}
-				// close file
-				if err := w.Close(file); err != nil {
-					log.Fatalf("could not close file: %v", err)
+				log.Printf("Write response: %d", bytes)
+				log.Printf("File content: %s", content)
+				if err := w.FinalizeWrite(file, uuidString); err != nil {
+					log.Fatalf("could not finalize write: %v", err)
 				}
+				if err := stream.Send(&pb.InvalidNotificationRequest{Filename: filename, Uid: uuidString}); err != nil {
+					log.Fatal(err)
+				}
+				log.Printf("send invalid: %s\n", filename)
 			}
-		}() // goroutine
-		
-		stream, err := c.InvalidNotification(ctx)
-		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				log.Fatal(err)
+			// close file
+			if err := w.Close(file); err != nil {
+				log.Fatalf("could not close file: %v", err)
 			}
-			log.Printf("recv: %s", resp.String())
 		}
+	}() // goroutine
+		
+	for {
+		res, err := stream.Recv()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("recv: %s", res.String())
 	}
-
+}

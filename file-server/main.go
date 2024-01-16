@@ -14,12 +14,14 @@ import (
 )
 
 var (
-	// clients: key:uuid, value:pb.DFS_InvalidNotificationServer
-	clients = map[string]pb.DFS_InvalidNotificationServer{}
-	// cacheDict: key:fileName, value:uuid
-	cacheDict = map[string][]string{}
+	// clientServersMap: key:uuid, value:pb.DFS_InvalidNotificationServer
+	// clientServersMap = map[string]pb.DFS_InvalidNotificationServer{}
+	clientServersMap = make(map[string]pb.DFS_InvalidNotificationServer)
+	// haveCacheUserIDsMap: key:fileName, value:uuid
+	// haveCacheUserIDsMap = map[string][]string{}
+	haveCacheUserIDsMap = make(map[string][]string)
 	// dirty or clean
-	statusDict map[string]bool
+	statusMap map[string]bool
 	lockDir  = map[string]bool{}
 )
 
@@ -62,12 +64,12 @@ func (s *server) CloseFile(ctx context.Context, in *pb.CloseFileRequest) (*pb.Cl
 
 // 各clientが持ってるcacheを更新する
 func (s *server) UpdateCache(ctx context.Context, in *pb.UpdateCacheRequest) (*pb.UpdateCacheResponse, error) {
-	cacheDict[in.Filename] = append(cacheDict[in.Filename], in.Uuid)
+	haveCacheUserIDsMap[in.Filename] = append(haveCacheUserIDsMap[in.Filename], in.Uuid)
 	return &pb.UpdateCacheResponse{Success: true}, nil
 }
 
 func (s *server) DeleteCache(ctx context.Context, in *pb.DeleteCacheRequest) (*pb.DeleteCacheResponse, error) {
-	delete(cacheDict, in.Filename) // cacheDictから削除する
+	delete(haveCacheUserIDsMap, in.Filename) // haveCacheUsersMapから削除する
 	return &pb.DeleteCacheResponse{Success: true}, nil
 }
 
@@ -80,24 +82,60 @@ func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.Ch
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
+func (s *server) addClient(uid string, srv pb.DFS_InvalidNotificationServer) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
+	clientServersMap[uid] = srv
+}
+
+func (s *server) removeClient(uid string) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
+	delete(clientServersMap, uid)
+}
+
 func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("panic: %v", err)
+			os.Exit(1)
+		}
+	}()
+
 	for {
-		resp, err := srv.Recv()
+		log.Println("invalid notification called")
+		res, err := srv.Recv()
 		if err != nil {
 			log.Printf("recv err: %v", err)
 			break
 		}
-		clientUuidList := cacheDict[resp.Filename]
+		log.Println("before map")
+		log.Printf("res.Uid: %s\n", res.GetUid())
+		// 接続クライアントリストに登録
+		s.addClient(res.GetUid(), srv)
+		// 関数を抜けるときはリストから削除
+		defer s.removeClient(res.GetUid())
+		log.Println("after map")
+		clientUuidList := haveCacheUserIDsMap[res.Filename]
+		log.Printf("clientUuidList: %s\n", clientUuidList)
 		for _, clientUuid := range clientUuidList {
-			client := clients[clientUuid]
+			if clientUuid == res.GetUid() {
+				continue
+			}
+			log.Printf("clientUuid: %s, res.Uid: %s\n", clientUuid, res.GetUid())
+			client := clientServersMap[clientUuid]
+			if client == nil {
+				continue
+			}
 			// if resp.Except != nil && resp.Except.Value == client {
 			// 	fmt.Printf("except: %s\n", resp.Except.Value)
 			// 	continue
 			// }
 			fmt.Printf("client: %s\n", client)
-			if err := client.Send(&pb.InvalidNotificationResponse{Invalid: true}); err != nil {
+			if err := client.Send(&pb.InvalidNotificationResponse{Success: true}); err != nil {
 				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
 			}
+			log.Print("sent invalid notification")
 		}
 	}
 	return nil

@@ -84,12 +84,12 @@ message DeleteCacheResponse {
   bool success = 1;
 }
 
-
 message InvalidNotificationRequest {
   string filename = 1;
-  google.protobuf.StringValue except = 2;
+  string uid = 2;
+  google.protobuf.StringValue except = 3;
 }
 
 message InvalidNotificationResponse {
-  bool invalid = 1;
+  bool success = 1;
 }
