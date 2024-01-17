@@ -338,13 +338,13 @@ func main() {
 				}
 				log.Printf("Write response: %d", bytes)
 				log.Printf("File content: %s", content)
-				if err := w.FinalizeWrite(file, uuidString); err != nil {
-					log.Fatalf("could not finalize write: %v", err)
-				}
 				if err := stream.Send(&pb.InvalidNotificationRequest{Filename: filename, Uid: uuidString}); err != nil {
 					log.Fatal(err)
 				}
 				log.Printf("send invalid: %s\n", filename)
+				if err := w.FinalizeWrite(file, uuidString); err != nil {
+					log.Fatalf("could not finalize write: %v", err)
+				}
 			}
 			// close file
 			if err := w.Close(file); err != nil {
@@ -358,6 +358,6 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("recv: %s", res.String())
+		log.Printf("receive invalid notification: %s", res.String())
 	}
 }

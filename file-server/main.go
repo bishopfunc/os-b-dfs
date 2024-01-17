@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	pb "mygrpc/pkg/grpc"
 
@@ -15,10 +16,8 @@ import (
 
 var (
 	// clientServersMap: key:uuid, value:pb.DFS_InvalidNotificationServer
-	// clientServersMap = map[string]pb.DFS_InvalidNotificationServer{}
 	clientServersMap = make(map[string]pb.DFS_InvalidNotificationServer)
 	// haveCacheUserIDsMap: key:fileName, value:uuid
-	// haveCacheUserIDsMap = map[string][]string{}
 	haveCacheUserIDsMap = make(map[string][]string)
 	// dirty or clean
 	statusMap map[string]bool
@@ -109,16 +108,17 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 			log.Printf("recv err: %v", err)
 			break
 		}
-		log.Println("before map")
-		log.Printf("res.Uid: %s\n", res.GetUid())
 		// 接続クライアントリストに登録
 		s.addClient(res.GetUid(), srv)
 		// 関数を抜けるときはリストから削除
 		defer s.removeClient(res.GetUid())
 		log.Println("after map")
+		log.Printf("haveCacheUserIDsMap: %s\n", haveCacheUserIDsMap)
+		log.Printf("res.Filename: %s\n", res.Filename)
 		clientUuidList := haveCacheUserIDsMap[res.Filename]
 		log.Printf("clientUuidList: %s\n", clientUuidList)
 		for _, clientUuid := range clientUuidList {
+			log.Println("************************")
 			if clientUuid == res.GetUid() {
 				continue
 			}
@@ -131,6 +131,7 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 			// 	fmt.Printf("except: %s\n", resp.Except.Value)
 			// 	continue
 			// }
+			log.Println("++++++++++++++++++++++++++++")
 			fmt.Printf("client: %s\n", client)
 			if err := client.Send(&pb.InvalidNotificationResponse{Success: true}); err != nil {
 				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
@@ -159,5 +160,16 @@ func startServer(port string) {
 func main() {
 	go startServer(":50052")
 	go startServer(":50053")
+	// 10秒ごとにlogを出力
+	// デバッグ用
+	go func() {
+		for {
+			log.Printf("clientServersMap: %s\n", clientServersMap)
+			log.Printf("haveCacheUserIDsMap: %s\n", haveCacheUserIDsMap)
+			log.Println(haveCacheUserIDsMap["a.txt"])
+			log.Println("========================================")
+			<-time.After(10 * time.Second)
+		}
+	}()
 	select {} // メインゴルーチンをブロックし続ける
 }
