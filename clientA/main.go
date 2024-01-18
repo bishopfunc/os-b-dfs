@@ -102,14 +102,15 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 	// }
 	// delete cache
 	// ここかな？ファイルを開いたときに、キャッシュを持っているユーザーが消えてしまうとsendIncalid出来なくなる
-	if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename}); err != nil {
-		return nil, err
-	}
+	// if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename}); err != nil {
+	// 	return nil, err
+	// }
 	// create file
 	file, err := os.Create(filename)
 	if err != nil {
 		return nil, err
 	}
+	
 	return file, nil
 }
 
@@ -144,10 +145,6 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	// 	}
 	// }
 	// }
-	// delete cache
-	if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename}); err != nil {
-		return nil, err
-	}
 	// create file
 	file, err := os.Create(filename)
 	if err != nil {
@@ -353,9 +350,12 @@ func main() {
 			}
 		}
 	}() // goroutine
-		
+	
 	for {
 		res, err := stream.Recv()
+		if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: res.GetFilename()}); err != nil {
+			log.Fatalf("could not delete cache: %v", err)
+		}
 		if err != nil {
 			log.Fatal(err)
 		}

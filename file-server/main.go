@@ -17,10 +17,10 @@ import (
 var (
 	// clientServersMap: key:uuid, value:pb.DFS_InvalidNotificationServer
 	clientServersMap = make(map[string]pb.DFS_InvalidNotificationServer)
-	// haveCacheUserIDsMap: key:fileName, value:uuid
+	// haveCacheUserIDsMap: key:fileName, value:[]{}uuid
 	haveCacheUserIDsMap = make(map[string][]string)
 	// dirty or clean
-	statusMap map[string]bool
+	// statusMap map[string]bool
 	lockDir  = map[string]bool{}
 )
 
@@ -112,9 +112,7 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 		s.addClient(res.GetUid(), srv)
 		// 関数を抜けるときはリストから削除
 		defer s.removeClient(res.GetUid())
-		log.Println("after map")
-		log.Printf("haveCacheUserIDsMap: %s\n", haveCacheUserIDsMap)
-		log.Printf("res.Filename: %s\n", res.Filename)
+
 		clientUuidList := haveCacheUserIDsMap[res.Filename]
 		log.Printf("clientUuidList: %s\n", clientUuidList)
 		for _, clientUuid := range clientUuidList {
@@ -133,7 +131,7 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 			// }
 			log.Println("++++++++++++++++++++++++++++")
 			fmt.Printf("client: %s\n", client)
-			if err := client.Send(&pb.InvalidNotificationResponse{Success: true}); err != nil {
+			if err := client.Send(&pb.InvalidNotificationResponse{Filename: res.GetFilename()}); err != nil {
 				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
 			}
 			log.Print("sent invalid notification")
@@ -159,7 +157,7 @@ func startServer(port string) {
 
 func main() {
 	go startServer(":50052")
-	go startServer(":50053")
+	// go startServer(":50053")
 	// 10秒ごとにlogを出力
 	// デバッグ用
 	go func() {

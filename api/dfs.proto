@@ -91,5 +91,5 @@ message InvalidNotificationRequest {
 }
 
 message InvalidNotificationResponse {
-  bool success = 1;
+  string filename = 1;
 }
