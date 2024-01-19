@@ -41,7 +41,7 @@ func NewClientWrapper(client pb.DFSClient, ctx context.Context) *ClientWrapper {
 }
 
 func (w *ClientWrapper) OpenAsReadWithoutCache(filename, uuid string) (*os.File, error) {
-	fileResponse, err := w.client.OpenFile(w.ctx, &pb.OpenFileRequest{Filename: filename}) // w.clinet.Hoge()
+	fileResponse, err := w.client.OpenFile(w.ctx, &pb.OpenFileRequest{Filename: filename})
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to generate uuid: %v", err)
 	}
-	// stringに変換
 	uuidString := uuid.String()
 
 	conn, err := grpc.Dial(clientName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()) // grpc connection
@@ -301,7 +300,6 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("receive invalid notification: %s", res.GetFilename())
 		// ローカルのres.GetFilename()のファイルを削除する
 		if err := os.Remove(res.GetFilename()); err != nil {
 			log.Fatalf("could not remove file: %v", err)

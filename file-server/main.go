@@ -19,12 +19,8 @@ var (
 	clientServersMap = make(map[string]pb.DFS_NotifyInvalidServer)
 	// haveCacheUserIDsMap: key:fileName, value:[]{}uuid
 	haveCacheUserIDsMap = make(map[string][]string)
-	// dirty or clean
-	// statusMap map[string]bool
 	lockDir = map[string]bool{}
 )
-
-// {"a.txt": ["localhost:50052", "localhost:50053"], "b.txt": ["localhost:50052"]}
 
 type server struct {
 	pb.UnimplementedDFSServer
@@ -90,7 +86,6 @@ func (s *server) NotifyInvalid(srv pb.DFS_NotifyInvalidServer) error {
 	}()
 
 	for {
-		log.Println("invalid notification called")
 		res, err := srv.Recv()
 		if err != nil {
 			log.Printf("recv err: %v", err)
@@ -118,7 +113,6 @@ func (s *server) NotifyInvalid(srv pb.DFS_NotifyInvalidServer) error {
 			if err := client.Send(&pb.NotifyInvalidResponse{Filename: res.GetFilename()}); err != nil {
 				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
 			}
-			log.Print("sent invalid notification")
 		}
 	}
 
@@ -126,14 +120,10 @@ func (s *server) NotifyInvalid(srv pb.DFS_NotifyInvalidServer) error {
 }
 
 func (s *server) addClient(uid string, srv pb.DFS_NotifyInvalidServer) {
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
 	clientServersMap[uid] = srv
 }
 
 func (s *server) removeClient(uid string) {
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
 	delete(clientServersMap, uid)
 }
 
