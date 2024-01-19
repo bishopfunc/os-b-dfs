@@ -15,13 +15,13 @@ import (
 )
 
 var (
-	// clientServersMap: key:uuid, value:pb.DFS_InvalidNotificationServer
-	clientServersMap = make(map[string]pb.DFS_InvalidNotificationServer)
+	// clientServersMap: key:uuid, value:pb.DFS_NotifyInvalidServer
+	clientServersMap = make(map[string]pb.DFS_NotifyInvalidServer)
 	// haveCacheUserIDsMap: key:fileName, value:[]{}uuid
 	haveCacheUserIDsMap = make(map[string][]string)
 	// dirty or clean
 	// statusMap map[string]bool
-	lockDir  = map[string]bool{}
+	lockDir = map[string]bool{}
 )
 
 // {"a.txt": ["localhost:50052", "localhost:50053"], "b.txt": ["localhost:50052"]}
@@ -54,7 +54,7 @@ func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.Open
 }
 
 func (s *server) CloseFile(ctx context.Context, in *pb.CloseFileRequest) (*pb.CloseFileResponse, error) {
-	ulr, err:= s.UpdateLock(ctx, &pb.UpdateLockRequest{Filename: in.Filename, Lock: false})
+	ulr, err := s.UpdateLock(ctx, &pb.UpdateLockRequest{Filename: in.Filename, Lock: false})
 	if err != nil {
 		return nil, fmt.Errorf("[server] failed to close file: %v", err)
 	}
@@ -81,14 +81,14 @@ func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.Ch
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
-func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error {
+func (s *server) NotifyInvalid(srv pb.DFS_NotifyInvalidServer) error {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("panic: %v", err)
 			os.Exit(1)
 		}
 	}()
-		
+
 	for {
 		log.Println("invalid notification called")
 		res, err := srv.Recv()
@@ -115,7 +115,7 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 			if client == nil {
 				continue
 			}
-			if err := client.Send(&pb.InvalidNotificationResponse{Filename: res.GetFilename()}); err != nil {
+			if err := client.Send(&pb.NotifyInvalidResponse{Filename: res.GetFilename()}); err != nil {
 				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
 			}
 			log.Print("sent invalid notification")
@@ -125,7 +125,7 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 	return nil
 }
 
-func (s *server) addClient(uid string, srv pb.DFS_InvalidNotificationServer) {
+func (s *server) addClient(uid string, srv pb.DFS_NotifyInvalidServer) {
 	// s.mu.Lock()
 	// defer s.mu.Unlock()
 	clientServersMap[uid] = srv

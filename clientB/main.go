@@ -78,7 +78,7 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return file, nil
 }
 
@@ -228,13 +228,13 @@ func main() {
 	ctx := context.Background()
 	w := NewClientWrapper(c, ctx)
 
-	stream, err := c.InvalidNotification(ctx)
+	stream, err := c.NotifyInvalid(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// 一度呼んでおかないとreadだけしたクライアントがclientServersMapに追加されないため、偽のリクエストを送る
-	if err := stream.Send(&pb.InvalidNotificationRequest{Filename: "", Uid: uuidString}); err != nil {
+	if err := stream.Send(&pb.NotifyInvalidRequest{Filename: "", Uid: uuidString}); err != nil {
 		log.Fatal(err)
 	}
 
@@ -250,7 +250,7 @@ func main() {
 			fmt.Println("Enter mode: r/w")
 			scanner.Scan()
 			mode := scanner.Text()
-			
+
 			// ファイルを開く
 			file, err := w.Open(filename, mode, uuidString)
 			if err != nil {
@@ -282,7 +282,7 @@ func main() {
 				}
 				log.Printf("Write response: %d", bytes)
 				log.Printf("File content: %s", content)
-				if err := stream.Send(&pb.InvalidNotificationRequest{Filename: filename, Uid: uuidString}); err != nil {
+				if err := stream.Send(&pb.NotifyInvalidRequest{Filename: filename, Uid: uuidString}); err != nil {
 					log.Fatal(err)
 				}
 				if err := w.FinalizeWrite(file, uuidString); err != nil {
@@ -295,7 +295,7 @@ func main() {
 			}
 		}
 	}() // goroutine
-	
+
 	for {
 		res, err := stream.Recv()
 		if err != nil {
