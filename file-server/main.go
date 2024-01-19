@@ -114,23 +114,14 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 		defer s.removeClient(res.GetUid())
 
 		clientUuidList := haveCacheUserIDsMap[res.Filename]
-		log.Printf("clientUuidList: %s\n", clientUuidList)
 		for _, clientUuid := range clientUuidList {
-			log.Println("************************")
 			if clientUuid == res.GetUid() {
 				continue
 			}
-			log.Printf("clientUuid: %s, res.Uid: %s\n", clientUuid, res.GetUid())
 			client := clientServersMap[clientUuid]
 			if client == nil {
 				continue
 			}
-			// if resp.Except != nil && resp.Except.Value == client {
-			// 	fmt.Printf("except: %s\n", resp.Except.Value)
-			// 	continue
-			// }
-			log.Println("++++++++++++++++++++++++++++")
-			fmt.Printf("client: %s\n", client)
 			if err := client.Send(&pb.InvalidNotificationResponse{Filename: res.GetFilename()}); err != nil {
 				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
 			}

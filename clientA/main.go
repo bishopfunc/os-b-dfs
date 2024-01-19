@@ -74,38 +74,6 @@ func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, erro
 	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true}); err != nil {
 		return nil, err
 	}
-	fmt.Printf("send invalid: %s\n", filename)
-	// send invalid from server to other client, other clinet delete cache
-	// req := &pb.InvalidNotificationRequest{Filename: filename}
-	// stream, err := w.client.InvalidNotification(w.ctx, req)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return nil, err
-	// }
-	// var invalid *pb.InvalidNotificationResponse
-	// if stream != nil {
-	// 	for {
-	// 		invalid, err = stream.Recv()
-	// 		if err == io.EOF {
-	// 			break
-	// 		}
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		// delete file
-	// 		if invalid != nil && invalid.GetInvalid() {
-	// 			fmt.Println("delete file: ", filename)
-	// 			os.Remove(filename)
-	// 			break
-	// 		}
-	// 	}
-	// }
-	// delete cache
-	// ここかな？ファイルを開いたときに、キャッシュを持っているユーザーが消えてしまうとsendIncalid出来なくなる
-	// if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: filename}); err != nil {
-	// 	return nil, err
-	// }
-	// create file
 	file, err := os.Create(filename)
 	if err != nil {
 		return nil, err
@@ -119,33 +87,6 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true}); err != nil {
 		return nil, err
 	}
-	fmt.Printf("send invalid: %s\n", filename)
-	// send invalid from server to other client, other clinet delete cache
-	// req := &pb.InvalidNotificationRequest{Filename: filename, Except: &wrapperspb.StringValue{Value: clientName}}
-	// stream, err := w.client.InvalidNotification(w.ctx, req)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return nil, err
-	// }
-	// var invalid *pb.InvalidNotificationResponse
-	// if stream != nil {
-	// 	for {
-	// 		invalid, err = stream.Recv()
-	// 		if err == io.EOF {
-	// 			break
-	// 		}
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 	delete file
-	// 	if invalid != nil && invalid.GetInvalid() {
-	// 		fmt.Println("delete file: ", filename)
-	// 		os.Remove(filename)
-	// 		break
-	// 	}
-	// }
-	// }
-	// create file
 	file, err := os.Create(filename)
 	if err != nil {
 		return nil, err
@@ -339,7 +280,6 @@ func main() {
 				if err := stream.Send(&pb.InvalidNotificationRequest{Filename: filename, Uid: uuidString}); err != nil {
 					log.Fatal(err)
 				}
-				log.Printf("send invalid: %s\n", filename)
 				if err := w.FinalizeWrite(file, uuidString); err != nil {
 					log.Fatalf("could not finalize write: %v", err)
 				}
@@ -353,12 +293,17 @@ func main() {
 	
 	for {
 		res, err := stream.Recv()
-		if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: res.GetFilename()}); err != nil {
-			log.Fatalf("could not delete cache: %v", err)
-		}
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("receive invalid notification: %s", res.String())
+		log.Printf("receive invalid notification: %s", res.GetFilename())
+		// ローカルのres.GetFilename()のファイルを削除する
+		if err := os.Remove(res.GetFilename()); err != nil {
+			log.Fatalf("could not remove file: %v", err)
+		}
+		// file-serverのhaveCacheUserIDsMap[res.GetFilename()]を削除する
+		if _, err := w.client.DeleteCache(w.ctx, &pb.DeleteCacheRequest{Filename: res.GetFilename()}); err != nil {
+			log.Fatalf("could not delete cache: %v", err)
+		}
 	}
 }
