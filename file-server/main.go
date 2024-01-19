@@ -81,18 +81,6 @@ func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.Ch
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
-func (s *server) addClient(uid string, srv pb.DFS_InvalidNotificationServer) {
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
-	clientServersMap[uid] = srv
-}
-
-func (s *server) removeClient(uid string) {
-	// s.mu.Lock()
-	// defer s.mu.Unlock()
-	delete(clientServersMap, uid)
-}
-
 func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error {
 	defer func() {
 		if err := recover(); err != nil {
@@ -100,7 +88,7 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 			os.Exit(1)
 		}
 	}()
-
+		
 	for {
 		log.Println("invalid notification called")
 		res, err := srv.Recv()
@@ -113,7 +101,12 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 		// 関数を抜けるときはリストから削除
 		defer s.removeClient(res.GetUid())
 
-		clientUuidList := haveCacheUserIDsMap[res.Filename]
+		// 最初1回だけFilenameが空の偽リクエストが送られてくる。この時、接続クライアントリストに登録するだけで良いためここでcontinueする
+		if res.GetFilename() == "" {
+			continue
+		}
+
+		clientUuidList := haveCacheUserIDsMap[res.GetFilename()]
 		for _, clientUuid := range clientUuidList {
 			if clientUuid == res.GetUid() {
 				continue
@@ -128,7 +121,20 @@ func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error
 			log.Print("sent invalid notification")
 		}
 	}
+
 	return nil
+}
+
+func (s *server) addClient(uid string, srv pb.DFS_InvalidNotificationServer) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
+	clientServersMap[uid] = srv
+}
+
+func (s *server) removeClient(uid string) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
+	delete(clientServersMap, uid)
 }
 
 func startServer(port string) {
@@ -155,7 +161,6 @@ func main() {
 		for {
 			log.Printf("clientServersMap: %s\n", clientServersMap)
 			log.Printf("haveCacheUserIDsMap: %s\n", haveCacheUserIDsMap)
-			log.Println(haveCacheUserIDsMap["a.txt"])
 			log.Println("========================================")
 			<-time.After(10 * time.Second)
 		}

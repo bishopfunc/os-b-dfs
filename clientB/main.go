@@ -233,6 +233,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// 一度呼んでおかないとreadだけしたクライアントがclientServersMapに追加されないため、偽のリクエストを送る
+	if err := stream.Send(&pb.InvalidNotificationRequest{Filename: "", Uid: uuidString}); err != nil {
+		log.Fatal(err)
+	}
+
 	go func() {
 		for {
 			// ファイル名の入力を求める
