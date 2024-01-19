@@ -2,6 +2,8 @@ module mygrpc
 
 go 1.19
 
+require github.com/google/uuid v1.5.0
+
 require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	golang.org/x/net v0.20.0 // indirect

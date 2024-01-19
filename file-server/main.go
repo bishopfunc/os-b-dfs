@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	pb "mygrpc/pkg/grpc"
 
@@ -14,7 +15,12 @@ import (
 )
 
 var (
-	cacheDir = map[string][]string{}
+	// clientServersMap: key:uuid, value:pb.DFS_InvalidNotificationServer
+	clientServersMap = make(map[string]pb.DFS_InvalidNotificationServer)
+	// haveCacheUserIDsMap: key:fileName, value:[]{}uuid
+	haveCacheUserIDsMap = make(map[string][]string)
+	// dirty or clean
+	// statusMap map[string]bool
 	lockDir  = map[string]bool{}
 )
 
@@ -47,14 +53,22 @@ func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.Open
 	return &pb.OpenFileResponse{Content: string(content)}, nil
 }
 
+func (s *server) CloseFile(ctx context.Context, in *pb.CloseFileRequest) (*pb.CloseFileResponse, error) {
+	ulr, err:= s.UpdateLock(ctx, &pb.UpdateLockRequest{Filename: in.Filename, Lock: false})
+	if err != nil {
+		return nil, fmt.Errorf("[server] failed to close file: %v", err)
+	}
+	return &pb.CloseFileResponse{Success: ulr.Success}, nil
+}
+
 // 各clientが持ってるcacheを更新する
 func (s *server) UpdateCache(ctx context.Context, in *pb.UpdateCacheRequest) (*pb.UpdateCacheResponse, error) {
-	cacheDir[in.Filename] = append(cacheDir[in.Filename], in.Client)
+	haveCacheUserIDsMap[in.Filename] = append(haveCacheUserIDsMap[in.Filename], in.Uuid)
 	return &pb.UpdateCacheResponse{Success: true}, nil
 }
 
 func (s *server) DeleteCache(ctx context.Context, in *pb.DeleteCacheRequest) (*pb.DeleteCacheResponse, error) {
-	delete(cacheDir, in.Filename) // cacheDirから削除する
+	delete(haveCacheUserIDsMap, in.Filename) // haveCacheUsersMapから削除する
 	return &pb.DeleteCacheResponse{Success: true}, nil
 }
 
@@ -67,19 +81,60 @@ func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.Ch
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
 }
 
-func (s *server) InvalidNotification(req *pb.InvalidNotificationRequest, stream pb.DFS_InvalidNotificationServer) error {
-	clientList := cacheDir[req.Filename]
-	for _, client := range clientList {
-		if req.Except != nil && req.Except.Value == client {
-			fmt.Printf("except: %s\n", req.Except.Value)
+func (s *server) InvalidNotification(srv pb.DFS_InvalidNotificationServer) error {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("panic: %v", err)
+			os.Exit(1)
+		}
+	}()
+		
+	for {
+		log.Println("invalid notification called")
+		res, err := srv.Recv()
+		if err != nil {
+			log.Printf("recv err: %v", err)
+			break
+		}
+		// 接続クライアントリストに登録
+		s.addClient(res.GetUid(), srv)
+		// 関数を抜けるときはリストから削除
+		defer s.removeClient(res.GetUid())
+
+		// 最初1回だけFilenameが空の偽リクエストが送られてくる。この時、接続クライアントリストに登録するだけで良いためここでcontinueする
+		if res.GetFilename() == "" {
 			continue
 		}
-		fmt.Printf("client: %s\n", client)
-		if err := stream.Send(&pb.InvalidNotificationResponse{Invalid: true}); err != nil {
-			return fmt.Errorf("[server] failed to send invalid notification: %v", err)
+
+		clientUuidList := haveCacheUserIDsMap[res.GetFilename()]
+		for _, clientUuid := range clientUuidList {
+			if clientUuid == res.GetUid() {
+				continue
+			}
+			client := clientServersMap[clientUuid]
+			if client == nil {
+				continue
+			}
+			if err := client.Send(&pb.InvalidNotificationResponse{Filename: res.GetFilename()}); err != nil {
+				return fmt.Errorf("[server] failed to send invalid notification: %v", err)
+			}
+			log.Print("sent invalid notification")
 		}
 	}
+
 	return nil
+}
+
+func (s *server) addClient(uid string, srv pb.DFS_InvalidNotificationServer) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
+	clientServersMap[uid] = srv
+}
+
+func (s *server) removeClient(uid string) {
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
+	delete(clientServersMap, uid)
 }
 
 func startServer(port string) {
@@ -99,6 +154,16 @@ func startServer(port string) {
 
 func main() {
 	go startServer(":50052")
-	go startServer(":50053")
+	// go startServer(":50053")
+	// 10秒ごとにlogを出力
+	// デバッグ用
+	go func() {
+		for {
+			log.Printf("clientServersMap: %s\n", clientServersMap)
+			log.Printf("haveCacheUserIDsMap: %s\n", haveCacheUserIDsMap)
+			log.Println("========================================")
+			<-time.After(10 * time.Second)
+		}
+	}()
 	select {} // メインゴルーチンをブロックし続ける
 }

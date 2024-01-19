@@ -14,7 +14,7 @@ service DFS {
   rpc DeleteCache(DeleteCacheRequest) returns (DeleteCacheResponse);
   rpc UpdateLock(UpdateLockRequest) returns (UpdateLockResponse);
   rpc CheckLock(CheckLockRequest) returns (CheckLockResponse);
-  rpc InvalidNotification(InvalidNotificationRequest) returns (stream InvalidNotificationResponse);
+  rpc InvalidNotification(stream InvalidNotificationRequest) returns (stream InvalidNotificationResponse);
 }
 
 message ReadFileRequest {
@@ -69,7 +69,7 @@ message CheckLockResponse {
 
 message UpdateCacheRequest {
   string filename = 1;
-  string client = 2;
+  string uuid = 2;
 }
 
 message UpdateCacheResponse {
@@ -84,12 +84,12 @@ message DeleteCacheResponse {
   bool success = 1;
 }
 
-
 message InvalidNotificationRequest {
   string filename = 1;
-  google.protobuf.StringValue except = 2;
+  string uid = 2;
+  google.protobuf.StringValue except = 3;
 }
 
 message InvalidNotificationResponse {
-  bool invalid = 1;
+  string filename = 1;
 }
