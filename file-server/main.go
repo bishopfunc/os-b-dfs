@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -19,7 +18,7 @@ var (
 	clientServersMap = make(map[string]pb.DFS_NotifyInvalidServer)
 	// haveCacheUserIDsMap: key:fileName, value:[]{}uuid
 	haveCacheUserIDsMap = make(map[string][]string)
-	lockDir = map[string]bool{}
+	lockDir             = map[string]bool{}
 )
 
 type server struct {
@@ -41,8 +40,17 @@ func (s *server) WriteFile(ctx context.Context, in *pb.WriteFileRequest) (*pb.Wr
 	return &pb.WriteFileResponse{Success: true}, nil
 }
 
+func (s *server) CreateDir(ctx context.Context, in *pb.CreateDirRequest) (*pb.CreateDirResponse, error) {
+	err := os.MkdirAll(in.Filepath, 0755)
+	if err != nil {
+		fmt.Println("[server] failed to make directory:", err)
+		return nil, err
+	}
+	return &pb.CreateDirResponse{Success: true}, nil
+}
+
 func (s *server) OpenFile(ctx context.Context, in *pb.OpenFileRequest) (*pb.OpenFileResponse, error) {
-	content, err := ioutil.ReadFile(in.Filename)
+	content, err := os.ReadFile(in.Filename)
 	if err != nil {
 		return nil, fmt.Errorf("[server] failed to open file: %v", err)
 	}

@@ -40,7 +40,7 @@ func NewClientWrapper(client pb.DFSClient, ctx context.Context) *ClientWrapper {
 	}
 }
 
-func (w *ClientWrapper) OpenAsReadWithoutCache(filename, uuid string) (*os.File, error) {
+func (w *ClientWrapper) OpenAsReadWithoutCache(filepath, filename, uuid string) (*os.File, error) {
 	fileResponse, err := w.client.OpenFile(w.ctx, &pb.OpenFileRequest{Filename: filename})
 	if err != nil {
 		return nil, err
@@ -69,9 +69,16 @@ func (w *ClientWrapper) OpenAsReadWithCache(filename string) (*os.File, error) {
 	return file, nil
 }
 
-func (w *ClientWrapper) OpenAsWriteWithoutCache(filename string) (*os.File, error) {
+func (w *ClientWrapper) OpenAsWriteWithoutCache(filepath string, filename string) (*os.File, error) {
 	// lock file
+	if filepath != "" {
+		_, err := w.client.CreateDir(w.ctx, &pb.CreateDirRequest{Filepath: filepath})
+		if err != nil {
+			return nil, err
+		}
+	}
 	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true}); err != nil {
+		fmt.Println("failed to update lock:")
 		return nil, err
 	}
 	file, err := os.Create(filename)
@@ -94,8 +101,7 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	return file, nil
 }
 
-func (w *ClientWrapper) FinalizeWrite(file *os.File, uuid string) error {
-	filename := file.Name()
+func (w *ClientWrapper) FinalizeWrite(filename string, uuid string) error {
 	// send file content to server
 	fileContent, err := os.ReadFile(filename)
 	if err != nil {
@@ -138,7 +144,7 @@ func (w *ClientWrapper) Read(file *os.File, buf []byte) (int, error) {
 }
 
 // 最低要件open
-func (w *ClientWrapper) Open(filename, mode, uuid string) (*os.File, error) {
+func (w *ClientWrapper) Open(filepath, filename, mode, uuid string) (*os.File, error) {
 	// check lock
 	var file *os.File
 	var err error
@@ -151,7 +157,7 @@ func (w *ClientWrapper) Open(filename, mode, uuid string) (*os.File, error) {
 				return nil, err
 			}
 		} else {
-			file, err = w.OpenAsReadWithoutCache(filename, uuid)
+			file, err = w.OpenAsReadWithoutCache(filepath, filename, uuid)
 			if err != nil {
 				return nil, err
 			}
@@ -160,6 +166,7 @@ func (w *ClientWrapper) Open(filename, mode, uuid string) (*os.File, error) {
 		// open write は lock されていたら開けない
 		locked, err := w.client.CheckLock(w.ctx, &pb.CheckLockRequest{Filename: filename})
 		if err != nil {
+			fmt.Println("check lock failed")
 			return nil, err
 		}
 		if locked.GetLocked() {
@@ -171,7 +178,7 @@ func (w *ClientWrapper) Open(filename, mode, uuid string) (*os.File, error) {
 				return nil, err
 			}
 		} else {
-			file, err = w.OpenAsWriteWithoutCache(filename)
+			file, err = w.OpenAsWriteWithoutCache(filepath, filename)
 			if err != nil {
 				return nil, err
 			}
@@ -239,11 +246,27 @@ func main() {
 
 	go func() {
 		for {
-			// ファイル名の入力を求める
-			fmt.Println("Enter file name:")
+			// ファイルが存在するディレクトリの入力を求める
+			fmt.Println("Enter directory where the file exists:")
 			scanner := bufio.NewScanner(os.Stdin)
 			scanner.Scan()
+			filepath := scanner.Text()
+
+			// ファイル名の入力を求める
+			fmt.Println("Enter file name:")
+			scanner.Scan()
 			filename := scanner.Text()
+
+			// ディレクトリ名が空でなければフォルダfilepathを作る
+			// filenameをfilepath/filenameに更新する
+			if filepath != "" {
+				err := os.MkdirAll(filepath, 0755)
+				if err != nil {
+					fmt.Println("failed to make directory:", err)
+					continue
+				}
+				filename = filepath + "/" + filename
+			}
 
 			// モードの入力を求める
 			fmt.Println("Enter mode: r/w")
@@ -251,7 +274,7 @@ func main() {
 			mode := scanner.Text()
 
 			// ファイルを開く
-			file, err := w.Open(filename, mode, uuidString)
+			file, err := w.Open(filepath, filename, mode, uuidString)
 			if err != nil {
 				log.Printf("could not open file: %v", err)
 				continue // エラーが発生した場合、次のイテレーションへ
@@ -284,7 +307,7 @@ func main() {
 				if err := stream.Send(&pb.NotifyInvalidRequest{Filename: filename, Uid: uuidString}); err != nil {
 					log.Fatal(err)
 				}
-				if err := w.FinalizeWrite(file, uuidString); err != nil {
+				if err := w.FinalizeWrite(filename, uuidString); err != nil {
 					log.Fatalf("could not finalize write: %v", err)
 				}
 			}
