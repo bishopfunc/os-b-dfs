@@ -19,7 +19,7 @@ var (
 	clientServersMap = make(map[string]pb.DFS_NotifyInvalidServer)
 	// haveCacheUserIDsMap: key:fileName, value:[]{}uuid
 	haveCacheUserIDsMap = make(map[string][]string)
-	lockDir = map[string]bool{}
+	lockMap = map[string]bool{}
 )
 
 type server struct {
@@ -69,12 +69,12 @@ func (s *server) DeleteCache(ctx context.Context, in *pb.DeleteCacheRequest) (*p
 }
 
 func (s *server) UpdateLock(ctx context.Context, in *pb.UpdateLockRequest) (*pb.UpdateLockResponse, error) {
-	lockDir[in.Filename] = in.Lock
+	lockMap[in.Filename] = in.Lock
 	return &pb.UpdateLockResponse{Success: true}, nil
 }
 
 func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
-	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
+	return &pb.CheckLockResponse{Locked: lockMap[in.Filename]}, nil
 }
 
 func (s *server) NotifyInvalid(srv pb.DFS_NotifyInvalidServer) error {
