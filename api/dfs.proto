@@ -15,6 +15,7 @@ service DFS {
   rpc UpdateLock(UpdateLockRequest) returns (UpdateLockResponse);
   rpc CheckLock(CheckLockRequest) returns (CheckLockResponse);
   rpc NotifyInvalid(stream NotifyInvalidRequest) returns (stream NotifyInvalidResponse);
+  rpc CreateDir(CreateDirRequest) returns (CreateDirResponse);
 }
 
 message ReadFileRequest {
@@ -92,4 +93,12 @@ message NotifyInvalidRequest {
 
 message NotifyInvalidResponse {
   string filename = 1;
+}
+
+message CreateDirRequest {
+  string filepath = 1;
+}
+
+message CreateDirResponse {
+  bool success = 1;
 }
