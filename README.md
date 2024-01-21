@@ -5,11 +5,11 @@
 - clintとcacheはローカルにある、FSはリモートにある。
 - キャッシュの更新、削除はopen時にやっておくと楽だからそうする。
 - 初めてopen(file, r)するときにキャッシュする。
-- FSでキャッシュを持ってるclientを記録しておく。cacheDir:{file, client}で管理する。
+- FSでキャッシュを持ってるclientを記録しておく。cacheMap:{file, client}で管理する。
 - open(file, w)するとき、キャッシュを持ってるclientにinvalidを送る。
 - invalidを受け取ると、そのファイルを削除する。
-- FSでLock状態のファイルを記録しておく。lockDir:{file, state}で管理する。
-- open(file, w)するとき、requestLockを送信し、lockDirを更新して、そのファイルをロック状態にする。cacheからFSにファイルが同期されたら、requestUnLockを送信して、lockDirを更新して、ロック状態を解除する。ロック状態はreadできるがwriteできない。clientはFSにアクセスするときに、lockdirをチェックする。
+- FSでLock状態のファイルを記録しておく。lockMap:{file, state}で管理する。
+- open(file, w)するとき、requestLockを送信し、lockMapを更新して、そのファイルをロック状態にする。cacheからFSにファイルが同期されたら、requestUnLockを送信して、lockMapを更新して、ロック状態を解除する。ロック状態はreadできるがwriteできない。clientはFSにアクセスするときに、lockMapをチェックする。
 - open, read, write, closeの引数、返り値はlinuxを真似してる、goのf.Read, f.Writeも似たような引数と返り値を取ってるから実装しやすい
 
 
@@ -30,24 +30,26 @@ sequenceDiagram
     participant cacheB as cacheB
     participant clientB as clientB
     Note over FS: Files: [a.txt, b.txt]
-    Note over FS: cacheDir: {<br>a.txt: [clientB], <br>b.txt: [..., ...]} 
+    Note over FS: cacheMap: {<br>a.txt: [clientB], <br>b.txt: [..., ...]} 
 
     Note over cacheA: Files: []
     Note over cacheB: Files: [a.txt]    
     
-    clientA->>cacheA: open("a.txt", r)
-    cacheA->>clientA: -1
-    clientA->>FS: open("a.txt", r)
-    FS->>cacheA: sendFile(cacheA, "a.txt")
-    Note left of FS: a.txt
+    clientA->>clientA: open("a.txt", r)
+    clientA->>cacheA: os.Open("a.txt", r)
+    cacheA->>clientA: file not exist
+    clientA->>cacheA: os.Create("a.txt")
+    Note left of cacheA: a.txt
+    cacheA->>clientA: file
     Note over cacheA: Files: [a.txt]
-    FS->>FS: updateCache("a.txt", clientA)
-    Note over FS: cacheDir: {<br>a.txt: [clientA, clientB], <br>b.txt: [..., ...]} 
-    FS->>FS: fd = openFile("a.txt")
-    FS->>clientA: fd
-    clientA->>clientA: bytes = read(fd, buf)
-    clientA->>FS: close(fd)
-    FS->>FS: closeFile(fd)
+    clientA->>FS: updateCache("a.txt", clientA(uuid))
+    Note over FS: cacheMap: {<br>a.txt: [clientA, clientB], <br>b.txt: [..., ...]} 
+    clientA->>FS: readFile("a.txt")
+    FS->>clientA: fileContent
+    clientA->>cacheA: os.WriteFile("a.txt", fileContent)
+    clientA->>clientA: close(file)
+    clientA->>cacheA: os.Close(file)
+    clientA->>FS: closeFile(file)
 ```
 ### キャッシュありread
 キャッシュあるなら、キャッシュを読みにいく、一番簡単
@@ -59,7 +61,7 @@ sequenceDiagram
     participant cacheB as cacheB
     participant clientB as clientB
     Note over FS: Files: [a.txt, b.txt]
-    Note over FS: cacheDir: {<br>a.txt: [clientA, clientB], <br>b.txt: [..., ...]} 
+    Note over FS: cacheMap: {<br>a.txt: [clientA, clientB], <br>b.txt: [..., ...]} 
 
     Note over cacheA: Files: [a.txt]    
     Note over cacheB: Files: [a.txt]    
@@ -82,44 +84,42 @@ sequenceDiagram
     participant cacheB as cacheB
     participant clientB as clientB
     Note over FS: Files: [a.txt, b.txt]
-    Note over FS: cacheDir: {<br>a.txt: [clientB], <br>b.txt: [..., ...]} 
+    Note over FS: cacheMap: {<br>a.txt: [clientB], <br>b.txt: [..., ...]} 
     Note over cacheA: Files: [a.txt]    
     Note over cacheB: Files: [a.txt] 
-
-    clientA->>cacheA: open("a.txt", w)
-    cacheA->>clientA: -1
-    clientA->>FS: open("a.txt", w)
-    clientA->>FS: requestLock("a.txt")
-    FS->>FS :updateLock()
-    Note over FS: lockDir: {<br>a.txt: True, <br>b.txt: False} 
-
-    FS->>FS: fd = openFile("a.txt")
-    clientA->>FS: sendInvalid("a.txt")
-    FS->>cacheB: invalid
-    cacheB->>cacheB: deleteFile("a.txt")
+    clientA->>clientA: open("a.txt", w)
+    clientA->>cacheA: os.Open("a.txt", w)
+    cacheA->>clientA: file not exist
+    clientA->>cacheA: os.Create("a.txt")
+    cacheA->>clientA: file
+    clientA->>FS: updateLock("a.txt", true)
+    Note over FS: lockMap: {<br>a.txt: True, <br>b.txt: False} 
+    clientA->>FS: InvaliNotify.send("a.txt")
+    FS->>cacheB: InvaliNotify.Recv("a.txt")
+    cacheB->>cacheB: os.Delete("a.txt")
     Note over cacheB: Files: []
 
-    FS->>FS: deleteCache("a.txt")
-    Note over FS: cacheDir: {<br>a.txt: [], <br>b.txt: [..., ...]} 
-    FS->>clientA: fd
-    clientA->>clientA: bytes = write(fd, buf)
+    clientA->>FS: deleteCache("a.txt")
+    Note over FS: cacheMap: {<br>a.txt: [], <br>b.txt: [..., ...]} 
+    clientA->>clientA: bytes = write(file, buf)
 
     Note over cacheB: Lock時readの動作
-    clientB->>FS: open("a.txt", w)
-    FS->>FS: True = checkLock()
-    FS->>clientB: -1
-    clientB->>FS: open("a.txt", r)
-    FS->>FS: True = checkLock()
-    FS->>FS: fd = openFile("a.txt", r)
-    FS->>clientB: fd
+    clientB->>FS: checkLock()
+    FS->>clientB: True
+    clientB->>clientB: open("a.txt", r)
+    clientB->>cacheB: open("a.txt", r)
+    cacheB->>clientB: file not exist
+    clientB->>FS: openFile("a.txt", r)
+    FS->>clientB: file
     Note over cacheB: 終了
 
-    clientA->>FS: close(fd)
-    FS->>FS: closeFile(fd)
+    clientA->>clientA: close(file)
+    clientA->>cacheA: os.Close(file)    
+    clientA->>FS: CloseFile(file)    
 
-    clientA->>FS: requestUnLock("a.txt")
+    clientA->>FS: updateLock("a.txt", false)
     FS->>FS :updateLock()
-    Note over FS: lockDir: {<br>a.txt: False, <br>b.txt: False} 
+    Note over FS: lockMap: {<br>a.txt: False, <br>b.txt: False} 
 
 ```
 
@@ -134,14 +134,14 @@ sequenceDiagram
     participant cacheB as cacheB
     participant clientB as clientB
     Note over FS: Files: [a.txt, b.txt]
-    Note over FS: cacheDir: {<br>a.txt: [clientB], <br>b.txt: [..., ...]} 
+    Note over FS: cacheMap: {<br>a.txt: [clientB], <br>b.txt: [..., ...]} 
     Note over cacheA: Files: [a.txt]    
     Note over cacheB: Files: [a.txt, b.txt] 
 
     clientA->>cacheA: open("a.txt", w)
     clientA->>FS: requestLock("a.txt")
     FS->>FS :updateLock()
-    Note over FS: lockDir: {<br>a.txt: True, <br>b.txt: False} 
+    Note over FS: lockMap: {<br>a.txt: True, <br>b.txt: False} 
 
     FS->>FS: deleteFile(cacheA, "a.txt")
     clientA->>FS: sendInvalid("a.txt", except=cacheA)
@@ -149,7 +149,7 @@ sequenceDiagram
     cacheB->>cacheB: deleteFile("a.txt")
     Note over cacheB: Files: [b.txt]
     FS->>FS: deleteCache("a.txt")
-    Note over FS: cacheDir: {<br>a.txt: [], <br>b.txt: [..., ...]} 
+    Note over FS: cacheMap: {<br>a.txt: [], <br>b.txt: [..., ...]} 
 
     cacheA->>clientA: fd
     clientA->>clientA: bytes = write(fd, newData)
@@ -165,7 +165,7 @@ sequenceDiagram
 
     clientA->>FS: requestUnLock("a.txt")
     FS->>FS :updateLock()
-    Note over FS: lockDir: {<br>a.txt: False, <br>b.txt: False} 
+    Note over FS: lockMap: {<br>a.txt: False, <br>b.txt: False} 
 
 ```
 
