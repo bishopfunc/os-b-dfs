@@ -69,7 +69,7 @@ func (w *ClientWrapper) OpenAsReadWithCache(filename string) (*os.File, error) {
 	return file, nil
 }
 
-func (w *ClientWrapper) OpenAsWriteWithoutCache(filepath string, filename string) (*os.File, error) {
+func (w *ClientWrapper) OpenAsWriteWithoutCache(filepath, filename string) (*os.File, error) {
 	// lock file
 	if filepath != "" {
 		_, err := w.client.CreateDir(w.ctx, &pb.CreateDirRequest{Filepath: filepath})
