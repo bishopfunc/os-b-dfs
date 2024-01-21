@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v2"
+	"github.com/manifoldco/promptui"
 )
 
 type Config struct {
@@ -100,6 +101,44 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	return file, nil
 }
 
+func (w *ClientWrapper) OpenAsReadWriteWithoutCache(filepath, filename string) (*os.File, error) {
+	fileResponse, err := w.client.OpenFile(w.ctx, &pb.OpenFileRequest{Filename: filename})
+	// lock file
+	if filepath != "" {
+		_, err := w.client.CreateDir(w.ctx, &pb.CreateDirRequest{Filepath: filepath})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true}); err != nil {
+		fmt.Println("failed to update lock:")
+		return nil, err
+	}
+	// create file
+	file, err := os.Create(filename)
+	if err != nil {
+		return nil, err
+	}
+	// write file
+	if err := os.WriteFile(filename, []byte(fileResponse.GetContent()), 0644); err != nil {
+		return nil, err
+	}
+	fmt.Printf("create cache: %s\n", filename)
+	return file, nil
+}
+
+func (w *ClientWrapper) OpenAsReadWriteWithCache(filename string) (*os.File, error) {
+	// lock file
+	if _, err := w.client.UpdateLock(w.ctx, &pb.UpdateLockRequest{Filename: filename, Lock: true}); err != nil {
+		return nil, err
+	}
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
 func (w *ClientWrapper) FinalizeWrite(filename, uuid string) error {
 	// send file content to server
 	fileContent, err := os.ReadFile(filename)
@@ -178,6 +217,27 @@ func (w *ClientWrapper) Open(filepath, filename, mode, uuid string) (*os.File, e
 			}
 		} else {
 			file, err = w.OpenAsWriteWithoutCache(filepath, filename)
+			if err != nil {
+				return nil, err
+			}
+		}
+	case "rw":
+		// open write は lock されていたら開けない
+		locked, err := w.client.CheckLock(w.ctx, &pb.CheckLockRequest{Filename: filename})
+		if err != nil {
+			fmt.Println("check lock failed")
+			return nil, err
+		}
+		if locked.GetLocked() {
+			return nil, fmt.Errorf("file is locked")
+		}
+		if fileExists(filename) {
+			file, err = w.OpenAsReadWriteWithCache(filename)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			file, err = w.OpenAsReadWriteWithoutCache(filepath, filename)
 			if err != nil {
 				return nil, err
 			}
@@ -268,7 +328,7 @@ func main() {
 			}
 
 			// モードの入力を求める
-			fmt.Println("Enter mode: r/w")
+			fmt.Println("Enter mode: r ,w, rw")
 			scanner.Scan()
 			mode := scanner.Text()
 
@@ -303,6 +363,43 @@ func main() {
 				}
 				log.Printf("Write response: %d", bytes)
 				log.Printf("File content: %s", content)
+				if err := stream.Send(&pb.NotifyInvalidRequest{Filename: filename, Uid: uuidString}); err != nil {
+					log.Fatal(err)
+				}
+				if err := w.FinalizeWrite(filename, uuidString); err != nil {
+					log.Fatalf("could not finalize write: %v", err)
+				}
+			} else if mode == "rw" {
+				// writeで表示するときにファイルの中身を表示するようにする
+				filesize := fileinfo.Size()
+				buf := make([]byte, filesize)
+				bytes, err := w.Read(file, buf)
+				if err != nil {
+					log.Fatalf("could not read: %v", err)
+				}
+				log.Printf("Read response: %d", bytes)
+				log.Printf("File content: %s", string(buf))
+				prompt := promptui.Prompt{
+					Label:     "Enter file content",
+					Default:  string(buf), // 初期表示される文字列
+					AllowEdit: true,
+				}
+				result, err := prompt.Run()
+				if err != nil {
+					fmt.Printf("Prompt failed %v\n", err)
+					return
+				}
+				fmt.Printf("You choose %q\n", result)
+				newfile, err := os.Create(filename)
+				if err != nil {
+					log.Fatalf("could not create file: %v", err)
+				}
+				bytes, err = w.Write(newfile, []byte(result))
+				if err != nil {
+					log.Fatalf("could not write: %v", err)
+				}
+				log.Printf("Write response: %d", bytes)
+				log.Printf("File content: %s", result)
 				if err := stream.Send(&pb.NotifyInvalidRequest{Filename: filename, Uid: uuidString}); err != nil {
 					log.Fatal(err)
 				}

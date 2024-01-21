@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 
 	pb "mygrpc/pkg/grpc"
 
@@ -152,16 +151,5 @@ func startServer(port string) {
 
 func main() {
 	go startServer(":50052")
-	// go startServer(":50053")
-	// 10秒ごとにlogを出力
-	// デバッグ用
-	go func() {
-		for {
-			log.Printf("clientServersMap: %s\n", clientServersMap)
-			log.Printf("haveCacheUserIDsMap: %s\n", haveCacheUserIDsMap)
-			log.Println("========================================")
-			<-time.After(10 * time.Second)
-		}
-	}()
 	select {} // メインゴルーチンをブロックし続ける
 }
