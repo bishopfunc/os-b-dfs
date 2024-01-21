@@ -42,14 +42,18 @@ sequenceDiagram
     Note left of cacheA: a.txt
     cacheA->>clientA: file
     Note over cacheA: Files: [a.txt]
-    clientA->>FS: updateCache("a.txt", clientA(uuid))
-    Note over FS: cacheMap: {<br>a.txt: [clientA, clientB], <br>b.txt: [..., ...]} 
     clientA->>FS: readFile("a.txt")
     FS->>clientA: fileContent
     clientA->>cacheA: os.WriteFile("a.txt", fileContent)
+    Note left of cacheA: a.txt
+
+    clientA->>FS: updateCache("a.txt", clientA(uuid))
+    Note over FS: cacheMap: {<br>a.txt: [clientA, clientB], <br>b.txt: [..., ...]}  
+    clientA->>cacheA: read("a.txt")
+    cacheA->>clientA: bytes
     clientA->>clientA: close(file)
     clientA->>cacheA: os.Close(file)
-    clientA->>FS: closeFile(file)
+    clientA->>FS: closeFile(filename)
 ```
 ### キャッシュありread
 キャッシュあるなら、キャッシュを読みにいく、一番簡単
@@ -115,7 +119,7 @@ sequenceDiagram
 
     clientA->>clientA: close(file)
     clientA->>cacheA: os.Close(file)    
-    clientA->>FS: CloseFile(file)    
+    clientA->>FS: CloseFile(filename)    
 
     clientA->>FS: updateLock("a.txt", false)
     FS->>FS :updateLock()
