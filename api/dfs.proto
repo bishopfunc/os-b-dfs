@@ -44,7 +44,7 @@ message OpenFileResponse {
 }
 
 message CloseFileRequest {
-  string filename = 2;
+  string filename = 1;
 }
 
 message CloseFileResponse {
