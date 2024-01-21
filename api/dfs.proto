@@ -16,6 +16,16 @@ service DFS {
   rpc CheckLock(CheckLockRequest) returns (CheckLockResponse);
   rpc NotifyInvalid(stream NotifyInvalidRequest) returns (stream NotifyInvalidResponse);
   rpc CreateDir(CreateDirRequest) returns (CreateDirResponse);
+  rpc FilePathWalk(FilePathWalkRequest) returns (FilePathWalkResponse);
+
+}
+
+message FilePathWalkRequest {
+  string filepath = 1;
+}
+
+message FilePathWalkResponse {
+  repeated string filenames = 1;
 }
 
 message ReadFileRequest {

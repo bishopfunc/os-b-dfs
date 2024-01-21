@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	pb "mygrpc/pkg/grpc"
@@ -83,6 +84,25 @@ func (s *server) UpdateLock(ctx context.Context, in *pb.UpdateLockRequest) (*pb.
 
 func (s *server) CheckLock(ctx context.Context, in *pb.CheckLockRequest) (*pb.CheckLockResponse, error) {
 	return &pb.CheckLockResponse{Locked: lockDir[in.Filename]}, nil
+}
+
+func (s *server) FilePathWalk(ctx context.Context, in *pb.FilePathWalkRequest) (*pb.FilePathWalkResponse, error) {
+	var files []string
+	err := filepath.Walk(in.Filepath, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		ext := filepath.Ext(info.Name())
+		if ext == ".go" || ext == ".yaml" {
+			return nil // Skip .go and .yaml files
+		}
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("[server] failed to walk filepath: %v", err)
+	}
+	return &pb.FilePathWalkResponse{Filenames: files}, nil
 }
 
 func (s *server) NotifyInvalid(srv pb.DFS_NotifyInvalidServer) error {
