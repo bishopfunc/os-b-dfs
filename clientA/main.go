@@ -101,7 +101,7 @@ func (w *ClientWrapper) OpenAsWriteWithCache(filename string) (*os.File, error) 
 	return file, nil
 }
 
-func (w *ClientWrapper) FinalizeWrite(filename string, uuid string) error {
+func (w *ClientWrapper) FinalizeWrite(filename, uuid string) error {
 	// send file content to server
 	fileContent, err := os.ReadFile(filename)
 	if err != nil {
